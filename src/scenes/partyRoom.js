@@ -74,6 +74,8 @@ export function createPartyRoom(ctx) {
     micSustained: 0,
   };
 
+  let kridiSong = null;
+
   const hemi = new THREE.HemisphereLight(0xfff6ec, 0x9a6a80, 0.2);
   scene.add(hemi);
   const sun = new THREE.DirectionalLight(0xffe0c4, 0.06);
@@ -346,6 +348,29 @@ export function createPartyRoom(ctx) {
     if (!audio) return;
     audio.unlock();
     const start = () => audio.play("birthday-song", { volume: 0.8, fadeIn: 0.12 });
+    if (audio.ready) {
+      start();
+      return;
+    }
+    const loading = audio.preload();
+    if (loading?.then) loading.then(start).catch(() => {});
+  }
+
+  function stopKridiSong(fade = 0.25) {
+    if (!kridiSong) return;
+    kridiSong.stop(fade);
+    kridiSong = null;
+  }
+
+  function playKridiSong() {
+    const audio = ctx.audio;
+    if (!audio) return;
+    audio.unlock();
+    const start = () => {
+      if (state.disposed || !state.kridiActive) return;
+      stopKridiSong(0.1);
+      kridiSong = audio.play("kridi-last13", { volume: 0.85, fadeIn: 0.15 });
+    };
     if (audio.ready) {
       start();
       return;
@@ -645,6 +670,7 @@ export function createPartyRoom(ctx) {
     updateKridiPanel();
     if (kridiPanel) kridiPanel.hidden = false;
     if (kridiAdd) kridiAdd.disabled = false;
+    playKridiSong();
     rabbit.lookAt(null);
   }
 
@@ -652,6 +678,7 @@ export function createPartyRoom(ctx) {
     if (!state.kridiActive || state.busy || state.disposed) return;
     state.kridiActive = false;
     state.busy = true;
+    stopKridiSong(0.35);
     if (kridiPanel) kridiPanel.hidden = true;
     ctx.sfx("whoosh");
     await kridiBook.close();
@@ -938,6 +965,7 @@ export function createPartyRoom(ctx) {
     banner.dispose();
     ambience.dispose();
     gallery.dispose();
+    stopKridiSong(0.1);
     kridiBook.dispose();
     if (kridiPanel) kridiPanel.hidden = true;
     animals.forEach((animal) => animal.dispose());

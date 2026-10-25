@@ -1079,6 +1079,9 @@ body.maze-shake #scene {
   position: absolute;
   top: 64px;
   left: 12px;
+  max-width: min(420px, calc(100vw - 24px));
+  max-height: calc(100vh - 84px);
+  overflow: auto;
   padding: 8px 10px;
   border-radius: 10px;
   background: rgba(0, 0, 0, 0.72);
@@ -1355,6 +1358,8 @@ body.maze-shake #scene {
   position: fixed;
   top: 10px;
   right: 10px;
+  max-height: calc(100vh - 20px);
+  overflow: auto;
   z-index: 100;
   min-width: 190px;
   padding: 10px 12px;
@@ -1375,4 +1380,198 @@ body.maze-shake #scene {
   .maze-action-btn { width: 58px; height: 58px; }
   .maze-joystick { width: 104px; height: 104px; }
   .maze-stick { width: 46px; height: 46px; margin: -23px 0 0 -23px; }
+}
+
+
+.maze-objective {
+  position: absolute;
+  top: max(94px, calc(env(safe-area-inset-top) + 84px));
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 5px 11px;
+  border-radius: 999px;
+  background: rgba(24, 8, 22, 0.6);
+  border: 1px solid rgba(255, 182, 213, 0.18);
+  color: #ffd8e8;
+  font: 600 11px/1.2 "Segoe UI", system-ui, sans-serif;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+}
+
+.maze-control-hints {
+  position: absolute;
+  left: 50%;
+  bottom: max(18px, env(safe-area-inset-bottom));
+  transform: translateX(-50%);
+  padding: 7px 13px;
+  border-radius: 999px;
+  background: rgba(14, 4, 12, 0.62);
+  border: 1px solid rgba(255, 182, 213, 0.16);
+  color: rgba(255, 232, 244, 0.86);
+  font: 500 11px/1.25 "Segoe UI", system-ui, sans-serif;
+  max-width: calc(100vw - 24px);
+  white-space: normal;
+  text-align: center;
+  opacity: 1;
+  transition: opacity 1.2s ease;
+}
+
+.maze-control-hints.fade {
+  opacity: 0;
+}
+
+.maze-look-hint {
+  position: absolute;
+  left: 50%;
+  bottom: max(56px, calc(env(safe-area-inset-bottom) + 44px));
+  transform: translateX(-50%);
+  padding: 5px 10px;
+  border-radius: 999px;
+  background: rgba(8, 2, 8, 0.72);
+  color: #ffb6d5;
+  font: 600 10px/1.2 "Segoe UI", system-ui, sans-serif;
+  max-width: calc(100vw - 24px);
+  white-space: normal;
+  text-align: center;
+}
+
+.maze-look-hint[hidden] {
+  display: none;
+}
+
+.maze-screamer {
+  position: fixed;
+  inset: 0;
+  z-index: 88;
+  pointer-events: none;
+  overflow: hidden;
+  background: transparent;
+  opacity: 0;
+  transition: opacity 0.06s linear;
+}
+
+.maze-screamer.show {
+  opacity: 1;
+}
+
+.maze-screamer-face {
+  position: absolute;
+  z-index: 1;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: 50% 42%;
+  opacity: 0;
+  filter: contrast(1.35) saturate(0.72) brightness(0.95);
+  transform: scale(1.06);
+  transition: opacity 0.05s linear;
+}
+
+.maze-screamer.hit .maze-screamer-face {
+  opacity: 1;
+  animation: screamerFace 0.12s steps(2) infinite;
+}
+
+.maze-screamer.aftermath .maze-screamer-face {
+  opacity: 0;
+}
+
+@keyframes screamerFace {
+  0% { transform: scale(1.04) translate(0, 0); filter: contrast(1.35) saturate(0.72); }
+  50% { transform: scale(1.08) translate(-1.5%, 0.8%); filter: contrast(1.8) saturate(0.3) hue-rotate(-12deg); }
+  100% { transform: scale(1.05) translate(1%, -0.5%); filter: contrast(1.5) saturate(0.55); }
+}
+
+.maze-screamer-static,
+.maze-screamer-scan {
+  position: absolute;
+  inset: -20%;
+  pointer-events: none;
+}
+
+.maze-screamer-static {
+  z-index: 2;
+  opacity: 0;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 180 180' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.92' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.7'/%3E%3C/svg%3E");
+  background-size: 220px 220px;
+  mix-blend-mode: screen;
+  animation: screamerStatic 0.11s steps(2) infinite;
+}
+
+.maze-screamer.hit .maze-screamer-static {
+  opacity: 0.2;
+}
+
+.maze-screamer.aftermath .maze-screamer-static {
+  opacity: 0.38;
+  background-size: 160px 160px;
+}
+
+.maze-screamer-scan {
+  z-index: 2;
+  background: repeating-linear-gradient(to bottom, transparent 0 2px, rgba(0, 0, 0, 0.5) 3px, transparent 4px);
+  opacity: 0.28;
+  mix-blend-mode: multiply;
+}
+
+.maze-screamer-text {
+  z-index: 3;
+  position: absolute;
+  left: 50%;
+  bottom: 12%;
+  transform: translateX(-50%) rotate(-2deg);
+  color: #fff2f5;
+  font: 900 clamp(22px, 7vw, 74px)/0.9 Impact, "Arial Black", sans-serif;
+  letter-spacing: 0.08em;
+  text-shadow: 0 0 8px #ff003c, 0 0 28px #ff003c, 3px 3px 0 #220008;
+  opacity: 0;
+}
+
+.maze-screamer.hit .maze-screamer-text {
+  opacity: 1;
+  animation: screamerText 0.09s steps(2) infinite;
+}
+
+.maze-screamer.aftermath .maze-screamer-text {
+  opacity: 0;
+}
+
+@keyframes screamerStatic {
+  0% { transform: translate(0, 0); }
+  25% { transform: translate(-3%, 2%); }
+  50% { transform: translate(2%, -3%); }
+  75% { transform: translate(-2%, -1%); }
+  100% { transform: translate(1%, 2%); }
+}
+
+@keyframes screamerText {
+  0% { transform: translateX(-50%) rotate(-2deg) scale(1); }
+  50% { transform: translateX(-51%) rotate(1deg) scale(1.04); }
+  100% { transform: translateX(-49%) rotate(-1deg) scale(0.99); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .maze-screamer-static,
+  .maze-screamer-text {
+    animation: none !important;
+  }
+}
+
+.maze-debug-row {
+  display: flex;
+  gap: 4px;
+  margin-top: 4px;
+  flex-wrap: wrap;
+}
+
+.maze-debug-row button,
+.maze-debug > button {
+  padding: 2px 5px;
+  border: 1px solid rgba(140, 255, 140, 0.35);
+  border-radius: 5px;
+  background: rgba(20, 50, 20, 0.8);
+  color: #b6ffb6;
+  font: 10px/1.2 Consolas, monospace;
+  cursor: pointer;
 }

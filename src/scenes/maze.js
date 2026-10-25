@@ -20,6 +20,16 @@ import {
   createFallingShelf,
 } from "../models/mazeProps.js";
 import { createGhost, GHOST_TYPES } from "../models/ghosts.js";
+import {
+  createCursedFrame,
+  createMirror,
+  createCRT,
+  createCeilingFace,
+  createScreamerEnemy,
+  createCheckpointCandle,
+  createDoorFace,
+} from "../models/screamer.js";
+import { ScreamerSystem } from "../game/screamers.js";
 import { generateMaze, MAZE_CELL } from "../game/mazeGen.js";
 import { AUDIO_FALLBACKS } from "../audio/audioMap.js";
 
@@ -89,6 +99,34 @@ export function createMaze(ctx) {
   const world = createMazeWorld(maze);
   scene.add(world.group);
 
+  const horror = new ScreamerSystem({
+    scene,
+    camera: window.__arnouba?.camera || null,
+    audio: ctx.audio,
+    onShake: (amount) => {
+      state.shakeTimer = Math.max(state.shakeTimer, 0.75 + amount * 0.55);
+      document.body.classList.add("maze-shake");
+    },
+    onLifeLoss: () => screamerLifeLoss(),
+    onBuild: () => {
+      ctx.audio?.setMusicState("calm", { force: true, fade: 0.2 });
+      world.lamps.forEach((lamp, i) => {
+        gsap.to(lamp.light, { intensity: 0.04, duration: 0.18, yoyo: true, repeat: 4, delay: i * 0.02 });
+      });
+    },
+    onAftermath: () => {
+      showVignette(1200);
+      showPrompt(CONFIG.maze.texts.scareAfter, 2200);
+    },
+    onDone: () => {
+      if (state.screamerLifeLoss) {
+        state.screamerLifeLoss = false;
+        if (state.lives <= 0) failGame();
+        else respawn();
+      }
+    },
+  });
+
   const hemi = new THREE.HemisphereLight(0x7a4c62, 0x160b12, 0.55);
   scene.add(hemi);
   const ambient = new THREE.AmbientLight(0x5a3040, 0.32);
@@ -154,7 +192,7 @@ export function createMaze(ctx) {
   scene.add(fakeExit.group);
 
   const libraryRoom = roomObjects.find((r) => r.type === "library") || roomObjects[0];
-  const painting = createPainting(CONFIG.photos[0]?.src || "/photos/na_ou_arnouba.jpg");
+  const painting =createPainting(CONFIG.photos[0]?.src || `${import.meta.env.BASE_URL}photos/na_ou_arnouba.jpg`);
   if (libraryRoom) {
     painting.group.position.set(libraryRoom.x, 0, libraryRoom.z - 1.1);
     painting.group.rotation.y = 0;
@@ -237,6 +275,65 @@ export function createMaze(ctx) {
     return spawnCells[(index * 13 + salt * 7) % spawnCells.length];
   }
 
+  const hallwayFrame = createCursedFrame(horror.texture, { behavior: "lunge" });
+  hallwayFrame.group.visible = false;
+  scene.add(hallwayFrame.group);
+
+  const mirror = createMirror(horror.texture);
+  if (bedroomRoom) {
+    mirror.group.position.set(bedroomRoom.x + 1.1, 0, bedroomRoom.z - 0.9);
+    mirror.group.rotation.y = -0.5;
+  } else {
+    const mirrorCell = cellFor(4, 8);
+    const mirrorPos = maze.cellToWorld(mirrorCell.c, mirrorCell.r);
+    mirror.group.position.set(mirrorPos.x, 0, mirrorPos.z);
+  }
+  scene.add(mirror.group);
+
+  const crt = createCRT(horror.texture);
+  if (toyRoom) {
+    crt.group.position.set(toyRoom.x - 0.8, 0, toyRoom.z + 0.6);
+    crt.group.rotation.y = 0.5;
+  } else {
+    const crtCell = cellFor(6, 12);
+    const crtPos = maze.cellToWorld(crtCell.c, crtCell.r);
+    crt.group.position.set(crtPos.x, 0, crtPos.z);
+  }
+  scene.add(crt.group);
+
+  const ceilingCell = cellFor(8, 14);
+  const ceilingPos = maze.cellToWorld(ceilingCell.c, ceilingCell.r);
+  const ceilingFace = createCeilingFace(horror.texture);
+  ceilingFace.group.position.set(ceilingPos.x, 0, ceilingPos.z);
+  scene.add(ceilingFace.group);
+
+  const corridorFigure = createScreamerEnemy(horror.texture, { scale: 1.28 });
+  scene.add(corridorFigure.group);
+  const screamerEnemy = createScreamerEnemy(horror.texture, { scale: 1.1 });
+  scene.add(screamerEnemy.group);
+  const enemyState = { active: false, stunTimer: 0, respawnTimer: 0, lifeLoss: false, screamCooldown: 0 };
+
+  const doorFace = createDoorFace(horror.texture);
+  doorFace.group.position.set(exitPos.x, 0, exitPos.z + 0.45);
+  doorFace.group.rotation.y = Math.PI;
+  scene.add(doorFace.group);
+
+  const checkpointCandles = [];
+  function addCheckpointCandle(x, z, r, c, zone) {
+    const candle = createCheckpointCandle();
+    candle.group.position.set(x, 0, z);
+    scene.add(candle.group);
+    checkpointCandles.push({ candle, r, c, zone });
+  }
+  addCheckpointCandle(startCell ? maze.cellToWorld(startCell.c, startCell.r).x : 0, startCell ? maze.cellToWorld(startCell.c, startCell.r).z : 0, startCell.r, startCell.c, 1);
+  if (libraryRoom) addCheckpointCandle(libraryRoom.x - 1.0, libraryRoom.z + 1.0, libraryRoom.r, libraryRoom.c, 2);
+  if (kitchenRoom) addCheckpointCandle(kitchenRoom.x + 1.0, kitchenRoom.z + 1.0, kitchenRoom.r, kitchenRoom.c, 2);
+  addCheckpointCandle(exitPos.x - 1.2, exitPos.z - 1.4, maze.exit.r, maze.exit.c, 3);
+
+  mirror.onScare = () => triggerScreamer("mirror");
+  crt.onScare = () => triggerScreamer("tv");
+  ceilingFace.onScare = () => triggerScreamer("ceiling");
+
   const ghostTypes = GHOST_TYPES.filter((type) => type !== "boss");
   const ghostCount = CONFIG.maze.ghostCounts[CONFIG.maze.difficulty] || CONFIG.maze.ghostCounts.normal;
   const ghostEntries = [];
@@ -312,6 +409,10 @@ export function createMaze(ctx) {
     audioLoad: document.getElementById("mazeAudioLoad"),
     audioLoadText: document.getElementById("mazeAudioLoadText"),
     audioLoadFill: document.getElementById("mazeAudioLoadFill"),
+    zone: document.getElementById("mazeZone"),
+    objective: document.getElementById("mazeObjective"),
+    controlHints: document.getElementById("mazeControlHints"),
+    lookHint: document.getElementById("mazeLookHint"),
     debug: document.getElementById("mazeDebug"),
     warning: document.getElementById("mazeWarning"),
     warningTitle: document.getElementById("mazeWarningTitle"),
@@ -338,6 +439,28 @@ export function createMaze(ctx) {
     leaving: false,
     caught: false,
     hidden: false,
+    gameState: "TITLE",
+    zone: 1,
+    tutorialStep: 0,
+    tutorialTimer: 0,
+    tutorialTorch: false,
+    tutorialHid: false,
+    pad: { x: 0, y: 0 },
+    gamepadPrev: [],
+    controlHintsTimer: 20,
+    camManualTimer: 0,
+    pointerLocked: false,
+    compassTimer: 0,
+    lostShown: false,
+    checkpointSaved: false,
+    hideScareArmed: false,
+    corridorStarted: false,
+    corridorPhase: "idle",
+    corridorTimer: 0,
+    corridorFlicker: 0,
+    enemySpawnTimer: 10,
+    finalScareStarted: false,
+    screamerLifeLoss: false,
     flashlightOn: true,
     keysFound: 0,
     lives: 3,
@@ -403,6 +526,48 @@ export function createMaze(ctx) {
     lastMove: { x: 0, z: -1 },
     debugInfo: { ix: 0, iz: 0, moveX: 0, moveZ: 0, screenX: 0 },
   };
+
+
+
+  function screamerLifeLoss() {
+    if (!state.active || state.hidden || state.leaving) return;
+    state.lives = Math.max(0, state.lives - 1);
+    state.damageCooldown = 2;
+    state.invuln = 1.6;
+    updateHud();
+    ctx.audio?.duck(0.2, 500);
+    playAudio("hurt");
+    if (state.lives <= 0) {
+      state.screamerLifeLoss = true;
+    }
+  }
+
+  function triggerScreamer(type = "jump", options = {}) {
+    if (!state.active || state.paused || state.leaving) return Promise.resolve(false);
+    if (!options.force && state.gameState === "TUTORIAL") return Promise.resolve(false);
+    return horror.trigger(type, options);
+  }
+
+  const MAZE_SAVE_KEY = "arnouba-maze-checkpoint-v1";
+
+  function saveCheckpoint() {
+    try {
+      localStorage.setItem(
+        MAZE_SAVE_KEY,
+        JSON.stringify({
+          r: state.checkpoint.r,
+          c: state.checkpoint.c,
+          zone: state.zone,
+          keys: state.keysFound,
+          lives: state.lives,
+          time: state.time,
+          keysCollected: keys.map((key) => key.collected),
+        })
+      );
+    } catch {
+      // Storage can be unavailable in private mode.
+    }
+  }
 
   function playAudio(key, options = {}) {
     const manager = ctx.audio;
@@ -474,13 +639,23 @@ export function createMaze(ctx) {
 
   const keysDown = new Set();
   const joy = { x: 0, y: 0, active: false, id: null };
-  const mouseLook = { dragging: false, id: null, lastX: 0, lastY: 0 };
+  const mouseLook = { dragging: false, id: null, lastX: 0, lastY: 0, moved: 0, charge: false, locked: false };
   const sceneCanvas = document.getElementById("scene");
+  const cameraRaycaster = new THREE.Raycaster();
+  const cameraRayOrigin = new THREE.Vector3();
+  const cameraRayDir = new THREE.Vector3();
 
   function updateHud() {
     if (!hud.root) return;
     hud.lives.textContent = "\u{1F497}".repeat(Math.max(0, state.lives)) + "\u{1F5A4}".repeat(Math.max(0, state.maxLives - state.lives));
     hud.keys.textContent = `\u{1F511} ${state.keysFound} / ${CONFIG.maze.keys}`;
+    if (hud.objective) {
+      hud.objective.textContent = `${CONFIG.maze.texts.objective} (${state.keysFound}/${CONFIG.maze.keys})`;
+    }
+    if (hud.zone) {
+      const zoneKey = `zone${Math.max(1, Math.min(3, state.zone))}`;
+      hud.zone.textContent = CONFIG.maze.texts[zoneKey] || CONFIG.maze.texts.zone1;
+    }
     const minutes = Math.floor(state.time / 60).toString().padStart(2, "0");
     const seconds = Math.floor(state.time % 60).toString().padStart(2, "0");
     hud.timer.textContent = `${minutes}:${seconds}`;
@@ -534,6 +709,14 @@ export function createMaze(ctx) {
 
   function setCheckpoint(r, c) {
     state.checkpoint = { r, c };
+    const entry = checkpointCandles.find((item) => item.r === r && item.c === c);
+    if (entry) {
+      entry.candle.activate();
+      state.zone = Math.max(state.zone, entry.zone);
+    }
+    state.checkpointSaved = true;
+    saveCheckpoint();
+    showPrompt(CONFIG.maze.texts.checkpoint, 2200);
   }
 
   function openYawForCell(r, c) {
@@ -629,6 +812,28 @@ export function createMaze(ctx) {
     state.flashlightOn = true;
     state.checkpoint = { ...startCell };
     state.scares = {};
+    state.gameState = "TITLE";
+    state.zone = 1;
+    state.tutorialStep = 0;
+    state.tutorialTimer = 0;
+    state.tutorialTorch = false;
+    state.tutorialHid = false;
+    state.pad = { x: 0, y: 0 };
+    state.gamepadPrev = [];
+    state.controlHintsTimer = 20;
+    state.camManualTimer = 0;
+    state.pointerLocked = false;
+    state.compassTimer = 0;
+    state.lostShown = false;
+    state.checkpointSaved = false;
+    state.hideScareArmed = false;
+    state.corridorStarted = false;
+    state.corridorPhase = "idle";
+    state.corridorTimer = 0;
+    state.corridorFlicker = 0;
+    state.enemySpawnTimer = 10;
+    state.finalScareStarted = false;
+    state.screamerLifeLoss = false;
     state.bearGaveKey = false;
     state.dollFallen = false;
     state.fakeOpened = false;
@@ -670,6 +875,24 @@ export function createMaze(ctx) {
       w.writing.mesh.material.opacity = 0;
     });
     resetPlayer();
+    horror.cooldownUntil = 0;
+    horror.busy = false;
+    hallwayFrame.reset();
+    hallwayFrame.group.visible = false;
+    mirror.reset();
+    crt.reset();
+    ceilingFace.reset();
+    corridorFigure.group.visible = false;
+    corridorFigure.state.active = false;
+    screamerEnemy.group.visible = false;
+    screamerEnemy.state.active = false;
+    enemyState.active = false;
+    enemyState.stunTimer = 0;
+    enemyState.respawnTimer = 0;
+    enemyState.lifeLoss = false;
+    enemyState.screamCooldown = 0;
+    doorFace.hide();
+    checkpointCandles.forEach((entry) => entry.candle.reset());
     document.body.classList.add("maze-active");
     if (hud.fail) hud.fail.hidden = true;
     if (hud.win) hud.win.hidden = true;
@@ -688,10 +911,21 @@ export function createMaze(ctx) {
     state.started = true;
     state.active = true;
     state.leaving = false;
+    state.gameState = "TUTORIAL";
+    state.controlHintsTimer = 20;
     if (hud.warning) hud.warning.hidden = true;
     if (hud.root) hud.root.hidden = false;
+    if (hud.controlHints) {
+      hud.controlHints.hidden = false;
+      hud.controlHints.textContent = CONFIG.maze.texts.hudControls;
+      hud.controlHints.classList.remove("fade");
+    }
+    if (hud.lookHint) {
+      hud.lookHint.hidden = false;
+      hud.lookHint.textContent = CONFIG.maze.texts.lookHint;
+    }
     startMazeAudio();
-    showPrompt(CONFIG.maze.texts.startControls, 5200);
+    showPrompt(CONFIG.maze.texts.tutorialMove, 3600);
     if (state.randomScare) {
       setTimeout(() => {
         if (state.active && !state.scares.random) {
@@ -717,12 +951,46 @@ export function createMaze(ctx) {
   function failGame() {
     state.active = false;
     state.caught = false;
+    state.gameState = "FAIL";
     if (hud.root) hud.root.hidden = true;
     if (hud.fail) hud.fail.hidden = false;
     document.body.classList.remove("maze-shake");
     ctx.audio?.setHeartbeat(0);
     if (ctx.audio?.ready) ctx.audio.setMusicState("gameover");
     else ctx.sfx("growl");
+  }
+
+  function retryFromCheckpoint() {
+    state.lives = state.maxLives;
+    state.caught = false;
+    state.hidden = false;
+    state.paused = false;
+    state.leaving = false;
+    state.active = true;
+    state.started = true;
+    state.winReady = false;
+    state.finalScareStarted = false;
+    state.exitOpening = false;
+    state.finalChase = state.keysFound >= CONFIG.maze.keys;
+    state.gameState = state.keysFound >= CONFIG.maze.keys ? "FINAL_CHASE" : `ZONE${Math.min(3, state.zone)}`;
+    resetPlayer();
+    resetFox();
+    resetGhosts();
+    state.bossActive = false;
+    boss.group.visible = false;
+    boss.state.active = false;
+    screamerEnemy.group.visible = false;
+    screamerEnemy.state.active = false;
+    enemyState.active = false;
+    enemyState.respawnTimer = 0;
+    if (hud.fail) hud.fail.hidden = true;
+    if (hud.jumpscare) hud.jumpscare.hidden = true;
+    document.body.classList.remove("maze-shake");
+    document.body.classList.add("maze-active");
+    ctx.audio?.setMusicState("calm", { force: true, fade: 0.4 });
+    ctx.audio?.setHeartbeat(0.15);
+    updateHud();
+    showPrompt(CONFIG.maze.texts.resumed, 2600);
   }
 
   function respawn() {
@@ -774,11 +1042,15 @@ export function createMaze(ctx) {
     key.collected = true;
     key.def.collected = true;
     state.keysFound += 1;
+    state.zone = Math.min(3, 1 + state.keysFound);
+    state.gameState = state.keysFound >= CONFIG.maze.keys ? "FINAL_CHASE" : `ZONE${state.zone}`;
     key.mesh.collect();
     playAudio("key-pickup");
     addScore(120);
     updateHud();
     showPrompt(`Mabrouk! Key ${state.keysFound} / ${CONFIG.maze.keys} \u{1F511}`, 1800);
+    const cell = maze.worldToCell(player.x, player.z);
+    setCheckpoint(cell.r, cell.c);
     const next = keys.find((k) => !k.collected);
     showHintArrow(next ? maze.cellToWorld(next.def.c, next.def.r) : exitPos);
     if (source === "bear") showPrompt("El bear 3tak key \u{1F43B}\u{1F497}", 2200);
@@ -840,6 +1112,7 @@ export function createMaze(ctx) {
     if (state.finalChaseStarted) return;
     state.finalChaseStarted = true;
     state.finalChase = true;
+    state.gameState = "FINAL_CHASE";
     state.finalTimer = 30;
     spawnBoss();
     foxState.mode = "CHASE";
@@ -911,6 +1184,12 @@ export function createMaze(ctx) {
       state.bossStun = seconds;
       count += 1;
       addScore(120);
+    }
+    if (enemyState.active && screamerEnemy.active && Math.hypot(screamerEnemy.position.x - x, screamerEnemy.position.z - z) < radius) {
+      screamerEnemy.stun(seconds);
+      enemyState.stunTimer = seconds;
+      count += 1;
+      addScore(140);
     }
     return count;
   }
@@ -1236,6 +1515,17 @@ export function createMaze(ctx) {
       hits += 1;
       addScore(100);
     }
+    if (enemyState.active && screamerEnemy.active) {
+      const dx = screamerEnemy.position.x - player.x;
+      const dz = screamerEnemy.position.z - player.z;
+      const dist = Math.hypot(dx, dz);
+      if (dist < range && dist > 0.001 && (dx * fx + dz * fz) / dist >= Math.cos(cfg.blastAngle)) {
+        screamerEnemy.stun(2.8);
+        enemyState.stunTimer = 2.8;
+        hits += 1;
+        addScore(140);
+      }
+    }
     if (state.bossActive && boss.active) {
       const dx = boss.position.x - player.x;
       const dz = boss.position.z - player.z;
@@ -1270,6 +1560,7 @@ export function createMaze(ctx) {
     if (state.winReady || state.leaving) return;
     state.winReady = true;
     state.active = false;
+    state.gameState = "WIN";
     state.exitOpening = true;
     exitDoor.setLocks(0);
     playAudio("lock-click");
@@ -1496,6 +1787,10 @@ export function createMaze(ctx) {
       ix += joy.x;
       iz += joy.y;
     }
+    if (state.pad) {
+      ix += state.pad.x;
+      iz += state.pad.y;
+    }
     const length = Math.hypot(ix, iz);
     player.moving = length > 0.08;
     const wantsRun = keysDown.has("ShiftLeft") || keysDown.has("ShiftRight") || state.runToggle ||
@@ -1584,8 +1879,8 @@ export function createMaze(ctx) {
       }
     }
     const distExit = Math.hypot(player.x - exitPos.x, player.z - (exitPos.z + 0.9));
-    if (state.keysFound >= CONFIG.maze.keys && distExit < 1.7 && !state.winReady) {
-      winGame();
+    if (state.keysFound >= CONFIG.maze.keys && distExit < 1.7 && !state.winReady && !state.finalScareStarted) {
+      void triggerFinalScare();
     }
   }
 
@@ -1721,7 +2016,7 @@ export function createMaze(ctx) {
     }
     state.nearHiding = nearest;
     if (nearest && !state.paused && performance.now() > state.promptUntil - 220) {
-      showPrompt("Hide? H / Hide \u{1F47B}", 650);
+      showPrompt("E: hide \u{1F47B}", 650);
     }
   }
 
@@ -1734,6 +2029,13 @@ export function createMaze(ctx) {
       playAudio("ui-click");
       updateHud();
       showPrompt("Khrejt\u2026 bqaddek!", 1000);
+      if (state.hideScareArmed && !state.scares.wardrobe) {
+        state.scares.wardrobe = true;
+        state.hideScareArmed = false;
+        setTimeout(() => {
+          if (state.active && !state.hidden) void triggerScreamer("wardrobe");
+        }, 380);
+      }
       return;
     }
     if (!state.nearHiding) {
@@ -1741,6 +2043,8 @@ export function createMaze(ctx) {
       return;
     }
     state.hidden = true;
+    state.tutorialHid = true;
+    if (state.gameState !== "TUTORIAL") state.hideScareArmed = true;
     player.x = state.nearHiding.x;
     player.z = state.nearHiding.z;
     rabbit.group.visible = false;
@@ -1753,28 +2057,63 @@ export function createMaze(ctx) {
 
   function toggleTorch() {
     state.flashlightOn = !state.flashlightOn;
+    if (state.gameState === "TUTORIAL" && !state.flashlightOn) state.tutorialTorch = true;
     updateHud();
     playAudio("flashlight-click");
   }
 
+  function rotateCamera(delta) {
+    player.camYaw += delta;
+    state.camManualTimer = 0.7;
+  }
+
+  function recenterCamera() {
+    player.camYaw = player.yaw - Math.PI;
+    player.camPitch = 0;
+    state.camManualTimer = 0;
+    playAudio("ui-click", { volume: 0.35 });
+  }
+
+  function startBlastCharge() {
+    if (!state.active || state.paused || state.hidden || state.blastCharging) return;
+    state.blastCharging = true;
+    state.blastCharge = 0;
+    playAudio("flashlight-charge");
+  }
+
   function onKeyDown(event) {
     if (!state.active || state.paused) return;
-    if (["KeyW", "KeyA", "KeyS", "KeyD", "ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", "Space", "KeyF", "KeyQ", "KeyE", "KeyH"].includes(event.code)) {
+    if (["KeyW", "KeyA", "KeyS", "KeyD", "ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", "Space", "KeyF", "KeyQ", "KeyE", "KeyH", "KeyJ", "KeyR", "KeyM", "KeyP", "ControlLeft", "ControlRight"].includes(event.code)) {
       event.preventDefault();
     }
-    if (event.repeat && ["Space", "KeyQ", "KeyE", "KeyH", "KeyF"].includes(event.code)) return;
+    if (event.repeat && ["Space", "KeyH", "KeyF", "KeyR", "KeyM", "KeyP", "ControlLeft", "ControlRight", "KeyJ"].includes(event.code)) return;
     if (event.code === "Space") {
       startDash();
       return;
     }
     if (event.code === "KeyQ") {
-      state.blastCharging = true;
-      state.blastCharge = 0;
-      playAudio("flashlight-charge");
+      rotateCamera(0.16);
       return;
     }
     if (event.code === "KeyE") {
-      interact();
+      if (state.hidden || state.nearHiding || state.nearInteract) {
+        if (state.hidden || state.nearHiding) toggleHide();
+        else interact();
+      } else {
+        rotateCamera(-0.16);
+      }
+      return;
+    }
+    if (event.code === "KeyR") {
+      recenterCamera();
+      return;
+    }
+    if (event.code === "KeyM") {
+      togglePointerLock();
+      return;
+    }
+    if (event.code === "KeyP" || event.code === "Escape") {
+      pauseGame(true);
       return;
     }
     if (event.code === "KeyH") {
@@ -1785,8 +2124,8 @@ export function createMaze(ctx) {
       toggleTorch();
       return;
     }
-    if (event.code === "Escape") {
-      pauseGame(true);
+    if (event.code === "ControlLeft" || event.code === "ControlRight" || event.code === "KeyJ") {
+      startBlastCharge();
       return;
     }
     keysDown.add(event.code);
@@ -1794,36 +2133,77 @@ export function createMaze(ctx) {
 
   function onKeyUp(event) {
     keysDown.delete(event.code);
-    if (event.code === "KeyQ" && state.blastCharging) {
+    if ((event.code === "ControlLeft" || event.code === "ControlRight" || event.code === "KeyJ") && state.blastCharging) {
       releaseBlast();
     }
   }
 
+  function togglePointerLock() {
+    if (document.pointerLockElement === sceneCanvas) {
+      document.exitPointerLock?.();
+      return;
+    }
+    sceneCanvas?.requestPointerLock?.();
+  }
+
   function onMouseDown(event) {
-    if (event.pointerType === "touch" || event.button !== 0) return;
     if (!state.active || state.paused || state.caught || state.leaving) return;
+    if (event.pointerType === "touch") {
+      if (event.clientX < window.innerWidth * 0.5) return;
+    } else if (event.button !== 0) {
+      return;
+    }
     mouseLook.dragging = true;
     mouseLook.id = event.pointerId;
     mouseLook.lastX = event.clientX;
     mouseLook.lastY = event.clientY;
+    mouseLook.moved = 0;
+    mouseLook.charge = event.pointerType !== "touch";
+    mouseLook.locked = document.pointerLockElement === sceneCanvas;
+    if (mouseLook.charge) startBlastCharge();
     sceneCanvas?.setPointerCapture?.(event.pointerId);
   }
 
   function onMouseMove(event) {
-    if (!mouseLook.dragging || event.pointerId !== mouseLook.id) return;
     if (!state.active || state.paused || state.caught || state.leaving) return;
+    const locked = document.pointerLockElement === sceneCanvas;
+    if (locked) {
+      const dx = event.movementX || 0;
+      const dy = event.movementY || 0;
+      if (Math.abs(dx) + Math.abs(dy) > 1) {
+        mouseLook.moved += Math.abs(dx) + Math.abs(dy);
+        if (mouseLook.moved > 6 && state.blastCharging) {
+          state.blastCharging = false;
+          state.blastCharge = 0;
+        }
+      }
+      player.camYaw -= dx * 0.0045;
+      player.camPitch = THREE.MathUtils.clamp(player.camPitch - dy * 0.003, -0.55, 0.6);
+      state.camManualTimer = 0.7;
+      return;
+    }
+    if (!mouseLook.dragging || event.pointerId !== mouseLook.id) return;
     const dx = event.clientX - mouseLook.lastX;
     const dy = event.clientY - mouseLook.lastY;
     mouseLook.lastX = event.clientX;
     mouseLook.lastY = event.clientY;
+    mouseLook.moved += Math.abs(dx) + Math.abs(dy);
+    if (mouseLook.moved > 6 && state.blastCharging) {
+      state.blastCharging = false;
+      state.blastCharge = 0;
+    }
     player.camYaw -= dx * 0.005;
     player.camPitch = THREE.MathUtils.clamp(player.camPitch - dy * 0.0035, -0.5, 0.55);
+    state.camManualTimer = 0.7;
   }
 
   function onMouseUp(event) {
     if (event.pointerId !== mouseLook.id) return;
     mouseLook.dragging = false;
     mouseLook.id = null;
+    if (mouseLook.charge && mouseLook.moved <= 6 && state.blastCharging) releaseBlast();
+    mouseLook.charge = false;
+    mouseLook.locked = false;
     if (sceneCanvas?.hasPointerCapture?.(event.pointerId)) {
       sceneCanvas.releasePointerCapture(event.pointerId);
     }
@@ -1880,7 +2260,7 @@ export function createMaze(ctx) {
   hud.pauseClose?.addEventListener("click", () => pauseGame(false));
   hud.failClose?.addEventListener("click", () => {
     if (hud.fail) hud.fail.hidden = true;
-    beginGame();
+    retryFromCheckpoint();
   });
   hud.winClose?.addEventListener("click", finishWin);
   hud.hide?.addEventListener("click", toggleHide);
@@ -1907,6 +2287,10 @@ export function createMaze(ctx) {
     state.blastCharging = false;
     state.blastCharge = 0;
   });
+  function onPointerLockChange() {
+    state.pointerLocked = document.pointerLockElement === sceneCanvas;
+  }
+  document.addEventListener("pointerlockchange", onPointerLockChange);
   window.addEventListener("keydown", onKeyDown);
   window.addEventListener("keyup", onKeyUp);
   sceneCanvas?.addEventListener("pointerdown", onMouseDown);
@@ -1923,8 +2307,11 @@ export function createMaze(ctx) {
       <div>move: <span id="dbgMove">0, 0</span></div>
       <div>rabbit screenX: <span id="dbgScreen">-</span></div>
       <div>state: <span id="dbgState">-</span></div>
+      <div>zone: <span id="dbgZone">-</span></div>
+      <div>tutorial: <span id="dbgTutorial">-</span></div>
       <div>fox: <span id="dbgFox">-</span></div>
       <div>ghosts: <span id="dbgGhost">-</span></div>
+      <div>screamer: <span id="dbgScreamer">-</span></div>
       <div>music: <span id="dbgMusic">-</span></div>
       <div>audio: <span id="dbgAudio">-</span></div>
       <div>fps: <span id="dbgFps">-</span></div>
@@ -1932,6 +2319,23 @@ export function createMaze(ctx) {
       <button id="dbgStun">stun ghosts</button>
       <button id="dbgAudioState">cycle audio</button>
       <button id="dbgExit">exit</button>
+      <div class="maze-debug-row">
+        <button data-screamer="1">1 hall</button>
+        <button data-screamer="2">2 wardrobe</button>
+        <button data-screamer="3">3 mirror</button>
+        <button data-screamer="4">4 tv</button>
+      </div>
+      <div class="maze-debug-row">
+        <button data-screamer="5">5 chase</button>
+        <button data-screamer="6">6 ceiling</button>
+        <button data-screamer="7">7 enemy</button>
+        <button data-screamer="8">8 final</button>
+      </div>
+      <div class="maze-debug-row">
+        <button id="dbgZone2">zone 2</button>
+        <button id="dbgZone3">zone 3</button>
+        <button id="dbgFinal">final</button>
+      </div>
     `;
     hud.debug.querySelector("#dbgKey")?.addEventListener("click", () => {
       const next = keys.find((k) => !k.collected);
@@ -1955,6 +2359,28 @@ export function createMaze(ctx) {
       player.x = exitPos.x;
       player.z = exitPos.z + 0.9;
     });
+    const screamerTypes = ["hallway", "wardrobe", "mirror", "tv", "chase", "ceiling", "enemy", "final"];
+    hud.debug.querySelectorAll("[data-screamer]").forEach((button) => {
+      button.addEventListener("click", () => {
+        const index = Number(button.dataset.screamer) - 1;
+        void triggerScreamer(screamerTypes[index] || "jump", { force: true, lifeLoss: screamerTypes[index] === "enemy" || screamerTypes[index] === "chase" });
+      });
+    });
+    hud.debug.querySelector("#dbgZone2")?.addEventListener("click", () => {
+      state.zone = 2;
+      state.gameState = "ZONE2";
+      updateHud();
+    });
+    hud.debug.querySelector("#dbgZone3")?.addEventListener("click", () => {
+      state.zone = 3;
+      state.gameState = "ZONE3";
+      updateHud();
+    });
+    hud.debug.querySelector("#dbgFinal")?.addEventListener("click", () => {
+      state.zone = 3;
+      state.gameState = "ZONE3";
+      startCorridorChase();
+    });
   }
 
   function updateDebug(dt) {
@@ -1966,6 +2392,9 @@ export function createMaze(ctx) {
       state.fpsAccum = 0;
       state.fpsFrames = 0;
       const s = hud.debug.querySelector("#dbgState");
+      const zone = hud.debug.querySelector("#dbgZone");
+      const tutorial = hud.debug.querySelector("#dbgTutorial");
+      const screamer = hud.debug.querySelector("#dbgScreamer");
       const f = hud.debug.querySelector("#dbgFox");
       const g = hud.debug.querySelector("#dbgGhost");
       const music = hud.debug.querySelector("#dbgMusic");
@@ -1975,7 +2404,10 @@ export function createMaze(ctx) {
       const yaw = hud.debug.querySelector("#dbgYaw");
       const move = hud.debug.querySelector("#dbgMove");
       const screen = hud.debug.querySelector("#dbgScreen");
-      if (s) s.textContent = state.active ? (state.paused ? "PAUSED" : state.hidden ? "HIDDEN" : "PLAY") : "IDLE";
+      if (s) s.textContent = state.active ? (state.paused ? "PAUSED" : state.hidden ? "HIDDEN" : state.gameState) : state.gameState;
+      if (zone) zone.textContent = `${state.zone} (${state.keysFound} keys)`;
+      if (tutorial) tutorial.textContent = `step ${state.tutorialStep} / ${state.controlHintsTimer.toFixed(0)}s`;
+      if (screamer) screamer.textContent = horror.busy ? `BUSY ${horror.type || ""}` : `cd ${Math.ceil(horror.cooldownRemaining / 1000)}s`;
       if (f) f.textContent = state.foxStun > 0 ? "STUNNED" : foxState.mode;
       if (g) {
         const chasing = ghostEntries.filter((entry) => entry.mode === "CHASE").length;
@@ -2019,6 +2451,9 @@ export function createMaze(ctx) {
     if (state.bossActive && boss.active && state.bossStun <= 0) {
       consider(boss.position.x, boss.position.z);
     }
+    if (enemyState.active && screamerEnemy.active && enemyState.stunTimer <= 0) {
+      consider(screamerEnemy.position.x, screamerEnemy.position.z);
+    }
     return nearest;
   }
 
@@ -2032,7 +2467,7 @@ export function createMaze(ctx) {
     const nearest = nearestThreatDistance();
     const danger = Math.max(0, Math.min(1, 1 - nearest / 9));
     const safe = state.hidden || isSafeZone();
-    const ghostChasing = ghostEntries.some((entry) => entry.model.active && entry.mode === "CHASE");
+    const ghostChasing = ghostEntries.some((entry) => entry.model.active && entry.mode === "CHASE") || enemyState.active;
     let next = "calm";
     if (safe) next = "safe";
     else if (state.finalChase || foxState.mode === "CHASE" || ghostChasing || danger > 0.72) next = "chase";
@@ -2060,7 +2495,288 @@ export function createMaze(ctx) {
     }
   }
 
+  function updateTutorial(dt) {
+    if (state.gameState !== "TUTORIAL") return;
+    if (state.controlHintsTimer > 0) {
+      state.controlHintsTimer -= dt;
+      if (state.controlHintsTimer <= 0 && hud.controlHints) {
+        hud.controlHints.classList.add("fade");
+      }
+    }
+    if (state.time > 8 && hud.lookHint) hud.lookHint.hidden = true;
+    if (state.tutorialStep === 0) {
+      if (player.moving) state.tutorialTimer += dt;
+      else state.tutorialTimer = Math.max(0, state.tutorialTimer - dt * 0.5);
+      if (state.tutorialTimer > 1.1) {
+        state.tutorialStep = 1;
+        showPrompt(CONFIG.maze.texts.tutorialSprint, 3200);
+      }
+    } else if (state.tutorialStep === 1) {
+      if (player.running) {
+        state.tutorialStep = 2;
+        showPrompt(CONFIG.maze.texts.tutorialTorch, 3200);
+      }
+    } else if (state.tutorialStep === 2) {
+      if (state.tutorialTorch) {
+        state.tutorialStep = 3;
+        showPrompt(CONFIG.maze.texts.tutorialHide, 3400);
+      }
+    } else if (state.tutorialStep === 3) {
+      if (state.tutorialHid) {
+        state.tutorialStep = 4;
+        state.gameState = "ZONE1";
+        state.zone = 1;
+        showPrompt(CONFIG.maze.texts.tutorialDone, 3200);
+        updateHud();
+      }
+    }
+  }
+
+  function updateCameraControl(dt) {
+    state.camManualTimer = Math.max(0, state.camManualTimer - dt);
+    if (state.camManualTimer <= 0 && player.moving && !state.hidden) {
+      const target = player.yaw - Math.PI;
+      player.camYaw = angleLerp(player.camYaw, target, 1 - Math.exp(-3.4 * dt));
+    }
+  }
+
+  function updateGamepad(dt) {
+    const pads = navigator.getGamepads?.();
+    const pad = pads?.[0];
+    if (!pad || !state.active || state.paused) {
+      state.pad.x = 0;
+      state.pad.y = 0;
+      return;
+    }
+    const dead = (value) => (Math.abs(value) < 0.18 ? 0 : value);
+    state.pad.x = dead(pad.axes[0] || 0);
+    state.pad.y = -dead(pad.axes[1] || 0);
+    const rx = dead(pad.axes[2] || 0);
+    if (Math.abs(rx) > 0) rotateCamera(-rx * dt * 1.9);
+    const pressed = pad.buttons.map((button) => button?.pressed);
+    const was = state.gamepadPrev;
+    if (pressed[0] && !was[0]) startDash();
+    if (pressed[1] && !was[1]) toggleTorch();
+    if (pressed[2] && !was[2]) {
+      if (state.hidden || state.nearHiding) toggleHide();
+      else interact();
+    }
+    if (pressed[3] && !was[3]) startBlastCharge();
+    if (!pressed[3] && was[3] && state.blastCharging) releaseBlast();
+    if (pressed[8] && !was[8]) recenterCamera();
+    if (pressed[9] && !was[9]) pauseGame(true);
+    state.gamepadPrev = pressed;
+  }
+
+  function updateCompass(dt) {
+    if (state.time < 60 || !state.active || state.hidden) return;
+    if (!state.lostShown) {
+      state.lostShown = true;
+      showPrompt(CONFIG.maze.texts.lost, 2600);
+    }
+    state.compassTimer -= dt;
+    if (state.compassTimer > 0 || state.hintTimer > 0) return;
+    state.compassTimer = 0.4;
+    const next = keys.find((key) => !key.collected);
+    showHintArrow(next ? maze.cellToWorld(next.def.c, next.def.r) : exitPos);
+  }
+
+  function startHallwayScare() {
+    if (state.scares.hallway || !state.active || state.hidden) return;
+    state.scares.hallway = true;
+    void (async () => {
+      for (let i = 0; i < 3; i += 1) {
+        if (!state.active || state.hidden) {
+          hallwayFrame.group.visible = false;
+          return;
+        }
+        const forwardX = -Math.sin(player.camYaw);
+        const forwardZ = -Math.cos(player.camYaw);
+        const distance = 5.2 - i * 1.05;
+        hallwayFrame.group.position.set(player.x + forwardX * distance, 0, player.z + forwardZ * distance);
+        hallwayFrame.group.rotation.y = Math.atan2(player.x - hallwayFrame.group.position.x, player.z - hallwayFrame.group.position.z);
+        hallwayFrame.group.visible = true;
+        world.lamps.forEach((lamp, index) => {
+          gsap.to(lamp.light, { intensity: 0.05, duration: 0.12, yoyo: true, repeat: 3, delay: index * 0.03 });
+        });
+        playAudioAt("whisper", hallwayFrame.group.position, { volume: 0.8, rate: 0.8 });
+        await wait(720);
+      }
+      hallwayFrame.group.visible = false;
+      if (state.active && !state.hidden) await triggerScreamer("hallway");
+    })();
+  }
+
+  function startCorridorChase() {
+    state.scares.corridor = true;
+    state.corridorStarted = true;
+    state.corridorPhase = "flicker";
+    state.corridorTimer = 0.7;
+    state.corridorFlicker = 0;
+    const forwardX = -Math.sin(player.camYaw);
+    const forwardZ = -Math.cos(player.camYaw);
+    corridorFigure.resetAt(player.x + forwardX * 6.2, player.z + forwardZ * 6.2);
+    corridorFigure.setMode("CRAWL");
+    showPrompt(CONFIG.maze.texts.corridor, 2400);
+    playAudioAt("whisper", corridorFigure.position, { volume: 0.9, rate: 0.7 });
+  }
+
+  function updateCorridorChase(dt) {
+    if (!state.corridorStarted) {
+      if (state.gameState === "ZONE3" && state.time > 24 && !state.scares.corridor) startCorridorChase();
+      return;
+    }
+    if (state.corridorPhase === "flicker") {
+      state.corridorTimer -= dt;
+      if (state.corridorTimer <= 0) {
+        state.corridorFlicker += 1;
+        state.corridorTimer = 0.7;
+        world.lamps.forEach((lamp, index) => {
+          gsap.to(lamp.light, { intensity: 0.04, duration: 0.1, yoyo: true, repeat: 2, delay: index * 0.02 });
+        });
+        if (state.corridorFlicker >= 3) {
+          state.corridorPhase = "gone";
+          state.corridorTimer = 0.8;
+          corridorFigure.group.visible = false;
+          corridorFigure.state.active = false;
+        } else {
+          const forwardX = -Math.sin(player.camYaw);
+          const forwardZ = -Math.cos(player.camYaw);
+          corridorFigure.group.position.set(
+            player.x + forwardX * (5.2 - state.corridorFlicker * 1.1),
+            0,
+            player.z + forwardZ * (5.2 - state.corridorFlicker * 1.1)
+          );
+        }
+      }
+      return;
+    }
+    if (state.corridorPhase === "gone") {
+      state.corridorTimer -= dt;
+      if (state.corridorTimer <= 0) {
+        const forwardX = -Math.sin(player.camYaw);
+        const forwardZ = -Math.cos(player.camYaw);
+        corridorFigure.resetAt(player.x - forwardX * 3.6, player.z - forwardZ * 3.6);
+        corridorFigure.setMode("CHASE");
+        state.corridorPhase = "chase";
+        state.corridorTimer = 3.6;
+        playAudioAt("fox-growl", corridorFigure.position, { volume: 1 });
+      }
+      return;
+    }
+    if (state.corridorPhase === "chase") {
+      state.corridorTimer -= dt;
+      corridorFigure.moveToward(player.x, player.z, 4.15, dt, maze);
+      corridorFigure.update(dt, { player });
+      const distance = Math.hypot(player.x - corridorFigure.position.x, player.z - corridorFigure.position.z);
+      if (!state.hidden && distance < 1.25) {
+        state.corridorPhase = "idle";
+        state.corridorStarted = false;
+        corridorFigure.vanish(0.25);
+        void triggerScreamer("chase", { lifeLoss: true, force: true });
+      } else if (state.corridorTimer <= 0 || state.hidden) {
+        state.corridorPhase = "idle";
+        state.corridorStarted = false;
+        corridorFigure.vanish(0.6);
+      }
+    }
+  }
+
+  function spawnScreamerEnemy() {
+    if (state.gameState === "TUTORIAL" || state.zone < 2 || state.hidden) return;
+    const forwardX = -Math.sin(player.camYaw);
+    const forwardZ = -Math.cos(player.camYaw);
+    let x = player.x - forwardX * 4.2;
+    let z = player.z - forwardZ * 4.2;
+    if (!maze.canMove(x, z, 0.35)) {
+      const cell = cellFor(11, 17);
+      const pos = maze.cellToWorld(cell.c, cell.r);
+      x = pos.x;
+      z = pos.z;
+    }
+    screamerEnemy.resetAt(x, z);
+    screamerEnemy.setMode("CRAWL");
+    enemyState.active = true;
+    enemyState.stunTimer = 0;
+    enemyState.respawnTimer = 0;
+    enemyState.lifeLoss = false;
+    enemyState.screamCooldown = 0;
+    playAudioAt("ghost-wail", screamerEnemy.position, { volume: 0.8, rate: 0.72 });
+  }
+
+  function updateScreamerEnemy(dt) {
+    if (!enemyState.active) {
+      if (state.gameState === "TUTORIAL" || state.zone < 2 || state.hidden) return;
+      state.enemySpawnTimer -= dt;
+      if (state.enemySpawnTimer <= 0) {
+        state.enemySpawnTimer = 16 + Math.random() * 8;
+        spawnScreamerEnemy();
+      }
+      return;
+    }
+    if (!screamerEnemy.active) {
+      enemyState.active = false;
+      enemyState.respawnTimer = 9;
+      return;
+    }
+    const dx = player.x - screamerEnemy.position.x;
+    const dz = player.z - screamerEnemy.position.z;
+    const distance = Math.hypot(dx, dz);
+    if (enemyState.stunTimer > 0) {
+      enemyState.stunTimer -= dt;
+      screamerEnemy.update(dt, { player });
+      if (enemyState.stunTimer <= 0) screamerEnemy.setMode("CRAWL");
+      return;
+    }
+    enemyState.screamCooldown = Math.max(0, enemyState.screamCooldown - dt);
+    if (!state.hidden && distance < 7.5 && enemyState.screamCooldown <= 0) {
+      enemyState.screamCooldown = 5;
+      playAudioAt("whisper", screamerEnemy.position, { volume: 0.9, rate: 0.68 });
+    }
+    const forward = new THREE.Vector3();
+    window.__arnouba?.camera?.getWorldDirection(forward);
+    const looking = (forward.x * dx + forward.z * dz) / Math.max(0.001, distance) > 0.42;
+    if (!looking || distance < 3.2) {
+      screamerEnemy.moveToward(player.x, player.z, looking ? 3.3 : 2.35, dt, maze);
+    }
+    screamerEnemy.update(dt, { player });
+    if (!state.hidden && distance < 1.15) {
+      enemyState.active = false;
+      screamerEnemy.vanish(0.25);
+      void triggerScreamer("enemy", { lifeLoss: true, force: true });
+    }
+  }
+
+  function updateScreamerScares(dt) {
+    const camera = window.__arnouba?.camera;
+    mirror.update(player, camera, dt);
+    crt.update(player, camera, dt);
+    ceilingFace.update(player, camera, dt);
+    checkpointCandles.forEach((entry) => entry.candle.update(dt));
+    if (state.gameState === "ZONE1" && state.time > 13 && !state.scares.hallway) startHallwayScare();
+    updateCorridorChase(dt);
+    updateScreamerEnemy(dt);
+  }
+
+  async function triggerFinalScare() {
+    if (state.finalScareStarted || state.winReady) return;
+    state.finalScareStarted = true;
+    state.gameState = "FINAL_CHASE";
+    state.exitOpening = true;
+    state.invuln = 10;
+    exitDoor.setLocks(0);
+    doorFace.show();
+    playAudio("door-creak");
+    showPrompt(CONFIG.maze.texts.finalScare, 2600);
+    await wait(520);
+    for (let i = 0; i < 8 && horror.busy; i += 1) await wait(250);
+    await triggerScreamer("final", { force: true });
+    doorFace.hide();
+    winGame();
+  }
+
   function update(dt) {
+    horror.update(dt);
     if (!state.started) {
       world.update(dt, true);
       rabbit.update(dt);
@@ -2084,7 +2800,11 @@ export function createMaze(ctx) {
       return;
     }
     updateTimers(dt);
+    updateGamepad(dt);
     updatePlayer(dt);
+    updateCameraControl(dt);
+    updateTutorial(dt);
+    updateCompass(dt);
     updateKeysAndExit(dt);
     updateFox(dt);
     updateGhosts(dt);
@@ -2092,6 +2812,7 @@ export function createMaze(ctx) {
     updatePowerUps(dt);
     updateWritings();
     updateScares(dt);
+    updateScreamerScares(dt);
     updateHidingPrompt();
     updateInteractions();
     updateCameraTargets();
@@ -2110,6 +2831,14 @@ export function createMaze(ctx) {
       const cz = player.z - forwardZ * d;
       if (!maze.canMove(cx, cz, 0.2)) break;
       safeDistance = d;
+    }
+    cameraRayOrigin.set(player.x, 1.28, player.z);
+    cameraRayDir.set(-forwardX, 0, -forwardZ);
+    cameraRaycaster.set(cameraRayOrigin, cameraRayDir);
+    cameraRaycaster.far = desired + 0.3;
+    const wallHits = cameraRaycaster.intersectObject(world.group, true);
+    if (wallHits.length) {
+      safeDistance = Math.max(0.32, Math.min(safeDistance, wallHits[0].distance - 0.14));
     }
     const firstPerson = !state.hidden && safeDistance < 1.05;
     const distance = state.hidden ? safeDistance : firstPerson ? 0.1 : safeDistance;
@@ -2140,6 +2869,7 @@ export function createMaze(ctx) {
     state.leaving = false;
     state.paused = false;
     state.randomScare = Math.random() < 0.05;
+    state.gameState = "TITLE";
     ctx.audio?.stopMaze();
     hideAudioLoad();
     resetGame();
@@ -2148,7 +2878,7 @@ export function createMaze(ctx) {
     if (hud.warningText) hud.warningText.textContent = CONFIG.maze.texts.startBody;
     if (hud.warningGoal) hud.warningGoal.textContent = CONFIG.maze.texts.startGoal;
     if (hud.warningControls) hud.warningControls.textContent = CONFIG.maze.texts.startControls;
-    if (hud.start) hud.start.textContent = CONFIG.maze.texts.close;
+    if (hud.start) hud.start.textContent = CONFIG.maze.texts.startLabel || "Start";
     if (meta?.debug) {
       beginGame();
       return;
@@ -2162,12 +2892,14 @@ export function createMaze(ctx) {
     state.active = false;
     ctx.audio?.stopMaze();
     hideAudioLoad();
+    document.removeEventListener("pointerlockchange", onPointerLockChange);
     window.removeEventListener("keydown", onKeyDown);
     window.removeEventListener("keyup", onKeyUp);
     sceneCanvas?.removeEventListener("pointerdown", onMouseDown);
     window.removeEventListener("pointermove", onMouseMove);
     window.removeEventListener("pointerup", onMouseUp);
     window.removeEventListener("pointercancel", onMouseUp);
+    document.exitPointerLock?.();
     document.body.classList.remove("maze-active", "maze-shake");
     if (hud.root) hud.root.hidden = true;
     if (hud.warning) hud.warning.hidden = true;
@@ -2189,6 +2921,15 @@ export function createMaze(ctx) {
     writings.forEach((entry) => entry.writing.dispose());
     ghostEntries.forEach((entry) => entry.model.dispose());
     boss.dispose();
+    hallwayFrame.dispose();
+    mirror.dispose();
+    crt.dispose();
+    ceilingFace.dispose();
+    corridorFigure.dispose();
+    screamerEnemy.dispose();
+    doorFace.dispose();
+    checkpointCandles.forEach((entry) => entry.candle.dispose());
+    horror.dispose();
     powerUps.forEach((power) => power.model.dispose());
     fox.dispose();
     rabbit.dispose();
@@ -2218,6 +2959,10 @@ export function createMaze(ctx) {
         hidden: state.hidden,
         keys: state.keysFound,
         lives: state.lives,
+        gameState: state.gameState,
+        zone: state.zone,
+        tutorialStep: state.tutorialStep,
+        screamer: horror.debugState,
         camYaw: player.camYaw,
         battery: state.battery,
         stamina: state.stamina,

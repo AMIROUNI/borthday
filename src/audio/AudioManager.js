@@ -42,6 +42,7 @@ export class AudioManager {
     this.sfxBus = null;
     this.ambienceBus = null;
     this.voiceBus = null;
+    this.screamBus = null;
     this.buffers = new Map();
     this.failed = new Set();
     this.active = new Set();
@@ -59,6 +60,7 @@ export class AudioManager {
     this.started = false;
     this.duckFactor = 1;
     this.duckTimer = null;
+    this.duckAllTimer = null;
     this.footstepIndex = 0;
   }
 
@@ -90,6 +92,8 @@ export class AudioManager {
     this.ambienceBus.connect(this.master);
     this.voiceBus = ctx.createGain();
     this.voiceBus.connect(this.master);
+    this.screamBus = ctx.createGain();
+    this.screamBus.connect(this.master);
   }
 
   setMuted(value) {
@@ -384,6 +388,27 @@ export class AudioManager {
       this.duckFactor = 1;
       if (this.music) this.music.setLevel(this.musicTarget, 0.35);
     }, ms);
+  }
+
+  duckAll(amount = 0.08, ms = 1600) {
+    if (!this.ctx) return;
+    const now = this.ctx.currentTime;
+    const level = clamp(amount, 0, 1);
+    for (const bus of [this.musicBus, this.sfxBus, this.ambienceBus, this.voiceBus]) {
+      if (!bus) continue;
+      bus.gain.cancelScheduledValues(now);
+      bus.gain.setTargetAtTime(level, now, 0.035);
+    }
+    clearTimeout(this.duckAllTimer);
+    this.duckAllTimer = setTimeout(() => {
+      if (!this.ctx) return;
+      const at = this.ctx.currentTime;
+      for (const bus of [this.musicBus, this.sfxBus, this.ambienceBus, this.voiceBus]) {
+        if (!bus) continue;
+        bus.gain.cancelScheduledValues(at);
+        bus.gain.setTargetAtTime(1, at, 0.18);
+      }
+    }, Math.max(50, ms));
   }
 
   update() {

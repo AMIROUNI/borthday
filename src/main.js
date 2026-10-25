@@ -804,7 +804,7 @@ function updateCamera(dt) {
 
 function loop(now) {
   requestAnimationFrame(loop);
-  const dt = Math.min((now - lastTime) / 1000, 0.05);
+  const dt = Math.max(0, Math.min((now - lastTime) / 1000, 0.05));
   lastTime = now;
   elapsed += dt;
   if (!current) return;

@@ -261,3 +261,52 @@ Audio assets below are licensed under **CC0 1.0 (public domain dedication)** unl
 - Source: local file supplied by the project owner
 - Files: birthday-song.mp3
 
+
+
+## Sting/jumpscare (short scream edit)
+
+- Author: hotpin7
+- License: CC0 1.0
+- Source: https://freesound.org/people/hotpin7/sounds/846789/
+- Files: scream-short.mp3
+- Derived from: jumpscare.mp3
+
+## Cartoony Ghost (long scream edit)
+
+- Author: LaurenPonder
+- License: CC0 1.0
+- Source: https://freesound.org/people/LaurenPonder/sounds/639426/
+- Files: scream-long.mp3
+- Derived from: ghost-wail.mp3
+
+## Glitch whoosh (derived from Radio Static)
+
+- Author: Takimeko
+- License: CC0 1.0
+- Source: https://freesound.org/people/Takimeko/sounds/684896/
+- Files: scream-whoosh.mp3
+- Derived from: radio-static.mp3
+
+## Low boom (derived from Game Over 3)
+
+- Author: melokacool
+- License: CC0 1.0
+- Source: https://freesound.org/people/melokacool/sounds/615457/
+- Files: scream-boom.mp3
+- Derived from: game-over.mp3
+
+## Tinnitus ring (synthesized)
+
+- Author: project
+- License: CC0 1.0 (synthesized)
+- Source: procedural
+- Files: scream-ring.mp3
+
+
+## Kridi (last 13 seconds)
+
+- Author: user-provided
+- License: user-provided, used with permission for this project
+- Source: local Kridi.mp3 supplied by the project owner
+- Files: kridi-last13.mp3
+- Derived from: last 13 seconds of Kridi.mp3

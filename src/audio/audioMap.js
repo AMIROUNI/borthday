@@ -1,4 +1,4 @@
-export const AUDIO_BASE = "/audio/";
+export const AUDIO_BASE = `${import.meta.env.BASE_URL}audio/`;
 
 export const AUDIO_MAP = {
   "amb-horror-drone": {
@@ -42,6 +42,12 @@ export const AUDIO_MAP = {
     category: "music",
     loop: false,
     volume: 0.8,
+  },
+  "kridi-last13": {
+    file: "kridi-last13.mp3",
+    category: "music",
+    loop: false,
+    volume: 0.85,
   },
   heartbeat: {
     file: "heartbeat.mp3",
@@ -289,6 +295,36 @@ export const AUDIO_MAP = {
     loop: false,
     volume: 0.6,
   },
+  "scream-short": {
+    file: "scream-short.mp3",
+    category: "sfx",
+    loop: false,
+    volume: 1,
+  },
+  "scream-long": {
+    file: "scream-long.mp3",
+    category: "sfx",
+    loop: false,
+    volume: 0.95,
+  },
+  "scream-whoosh": {
+    file: "scream-whoosh.mp3",
+    category: "sfx",
+    loop: false,
+    volume: 0.8,
+  },
+  "scream-boom": {
+    file: "scream-boom.mp3",
+    category: "sfx",
+    loop: false,
+    volume: 1,
+  },
+  "scream-ring": {
+    file: "scream-ring.mp3",
+    category: "sfx",
+    loop: false,
+    volume: 0.75,
+  },
   "ui-click": {
     file: "ui-click.mp3",
     category: "sfx",
@@ -372,4 +408,9 @@ export const AUDIO_FALLBACKS = {
   "life-lost": "scream",
   "game-over": "growl",
   "ui-click": "tap",
+  "scream-short": "scream",
+  "scream-long": "scream",
+  "scream-whoosh": "whoosh",
+  "scream-boom": "growl",
+  "scream-ring": "scream",
 };
