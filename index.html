@@ -1,0 +1,209 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="theme-color" content="#ffb6d5" />
+    <title>Arnouba's Birthday World 🐰🎂</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🐰</text></svg>" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Caveat:wght@500;600;700&family=Creepster&family=Fredoka:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+  </head>
+  <body>
+    <div id="app">
+      <canvas id="scene" aria-label="Arnouba's 3D birthday world"></canvas>
+
+      <div id="topbar" class="topbar">
+        <button id="resetBtn" class="icon-btn" title="Start over" aria-label="Start over">↺</button>
+        <div class="brand" id="brand">
+          <span class="brand-bunny">🐰</span>
+          <span>Arnouba's world</span>
+        </div>
+        <button id="muteBtn" class="icon-btn" title="Sound" aria-label="Toggle sound">🔊</button>
+      </div>
+
+      <button id="backBtn" class="back-btn" hidden>⬅ Raja3</button>
+
+      <div id="toast" class="toast" role="status"></div>
+
+      <div id="dialogue" class="dialogue" hidden>
+        <div class="dialogue-ears"><span></span><span></span></div>
+        <p id="dialogueText"></p>
+        <div class="dialogue-next" id="dialogueNext">▼</div>
+      </div>
+
+      <div id="sceneHint" class="scene-hint" hidden></div>
+      <button id="blowBtn" class="blow-btn" hidden>Tfi 🕯️</button>
+
+      <div id="letter" class="letter" hidden>
+        <div class="letter-card">
+          <div class="letter-hearts">💗 ✨ 💗</div>
+          <h2>Ya Arnouba…</h2>
+          <p id="letterText"></p>
+          <div class="letter-actions">
+            <button id="letterClose" class="pill-btn ghost">Close</button>
+          </div>
+        </div>
+      </div>
+
+      <div id="photoViewer" class="photo-viewer" hidden>
+        <div class="photo-hearts" aria-hidden="true">
+          <span>💗</span><span>💗</span><span>💗</span><span>💗</span><span>💗</span>
+        </div>
+        <div class="photo-viewer-card">
+          <button id="photoViewerClose" class="photo-close" aria-label="Close photo">✕</button>
+          <img id="photoViewerImage" alt="" />
+          <div class="photo-viewer-footer">
+            <button id="photoViewerPrev" class="photo-arrow" aria-label="Previous photo">‹</button>
+            <div>
+              <p id="photoViewerCaption"></p>
+              <span id="photoViewerCount"></span>
+            </div>
+            <button id="photoViewerNext" class="photo-arrow" aria-label="Next photo">›</button>
+          </div>
+        </div>
+      </div>
+
+      <div id="kridiPanel" class="kridi-panel" hidden>
+        <div class="kridi-total" id="kridiTotal"></div>
+        <div class="kridi-actions">
+          <button id="kridiAdd" class="pill-btn ghost">+ Zid cadeau</button>
+          <button id="kridiClose" class="pill-btn">Sakker el kridi</button>
+        </div>
+      </div>
+
+      <div id="mazeHud" class="maze-hud" hidden>
+        <div class="maze-top">
+          <div class="maze-stat" id="mazeLives">💗💗💗</div>
+          <div class="maze-stat" id="mazeKeys">🔑 0 / 3</div>
+          <div class="maze-stat" id="mazeTimer">00:00</div>
+          <div class="maze-stat maze-score" id="mazeScore">0</div>
+          <div class="maze-combo" id="mazeCombo" hidden>x1</div>
+          <button id="mazePauseBtn" class="maze-icon-btn" aria-label="Pause">❚❚</button>
+        </div>
+        <div class="maze-bars">
+          <div class="maze-bar" title="Stamina">
+            <span>⚡</span>
+            <div class="maze-bar-track"><div id="mazeStaminaFill" class="maze-bar-fill stamina"></div></div>
+          </div>
+          <div class="maze-bar" title="Blast battery">
+            <span>🔋</span>
+            <div class="maze-bar-track"><div id="mazeBatteryFill" class="maze-bar-fill battery"></div></div>
+          </div>
+        </div>
+        <div id="mazeHintArrow" class="maze-hint-arrow" hidden>➜</div>
+        <div id="mazePrompt" class="maze-prompt" hidden></div>
+        <div id="mazeJoystick" class="maze-joystick" hidden>
+          <div id="mazeStick" class="maze-stick"></div>
+        </div>
+        <div class="maze-actions" id="mazeActions" hidden>
+          <button id="mazeRunBtn" class="maze-action-btn small">Run</button>
+          <button id="mazeDashBtn" class="maze-action-btn small">Dash</button>
+          <button id="mazeBlastBtn" class="maze-action-btn blast">Blast</button>
+          <button id="mazeInteractBtn" class="maze-action-btn small">Slam</button>
+          <button id="mazeHideBtn" class="maze-action-btn">Hide</button>
+          <button id="mazeTorchBtn" class="maze-action-btn">🔦</button>
+        </div>
+        <div id="mazeDebug" class="maze-debug" hidden></div>
+      </div>
+
+      <div id="mazeFlash" class="maze-flash" hidden></div>
+      <div id="mazeVignette" class="maze-vignette" hidden></div>
+      <div id="mazeDashFx" class="maze-dash-fx" hidden></div>
+
+      <div id="mazeWarning" class="maze-overlay" hidden>
+        <div class="maze-card">
+          <div class="maze-card-hearts">👻 💗 🔑</div>
+          <h2 id="mazeWarningTitle">El Haunted Maze</h2>
+          <p id="mazeWarningText">El game fiha jump scares 😱</p>
+          <p class="maze-small" id="mazeWarningGoal">To5rej mel mata7a: l9a 3 keys, 7el el bab, w hrab mel tha3leb w el ghosts.</p>
+          <p class="maze-small" id="mazeWarningControls">Mouse: camera · WASD / arrows: rabbit · Shift: ejri · Space: dash · Q: blast · E: interact · H: hide · F: torch.</p>
+          <button id="mazeStartBtn" class="pill-btn maze-close-btn">Sakker 💗</button>
+        </div>
+      </div>
+
+      <div id="mazePause" class="maze-overlay" hidden>
+        <div class="maze-card">
+          <h2 id="mazePauseTitle">Pause</h2>
+          <p id="mazePauseBody">Khoudh nafas. Kif ma tkoun ready, sakker el card.</p>
+          <button id="mazePauseClose" class="pill-btn maze-close-btn">Sakker 💗</button>
+        </div>
+      </div>
+
+      <div id="mazeFail" class="maze-overlay" hidden>
+        <div class="maze-card">
+          <div class="maze-card-hearts">💀 💗</div>
+          <h2 id="mazeFailTitle">Ya3tik 3asba 😵</h2>
+          <p id="mazeFailBody">El ghosts w el tha3leb ghallebouk. Sakker bech t3awed mel bidaya.</p>
+          <button id="mazeFailClose" class="pill-btn maze-close-btn">Sakker 💗</button>
+        </div>
+      </div>
+
+      <div id="mazeWin" class="maze-overlay" hidden>
+        <div class="maze-card maze-win-card">
+          <div class="maze-card-hearts">🎉 💗 🔑</div>
+          <h2 id="mazeWinTitle">Brava Arnouba!</h2>
+          <p id="mazeWinBody">Khrejt mel haunted maze. El party t7allet!</p>
+          <button id="mazeWinClose" class="pill-btn maze-close-btn">Sakker 💗</button>
+        </div>
+      </div>
+
+      <div id="mazeJumpscare" class="maze-jumpscare" hidden>
+        <div class="jumpscare-face">
+          <div class="js-eye left"></div>
+          <div class="js-eye right"></div>
+          <div class="js-grin"></div>
+        </div>
+        <div class="jumpscare-text">BOOOO! 👻</div>
+      </div>
+
+      <div id="mazePromptOverlay" class="maze-overlay" hidden>
+        <div class="maze-card">
+          <h2>T7eb tod5el llbab o5re?</h2>
+          <p>Wela 5ayfa? Toul galouli 💗</p>
+          <div class="maze-pause-actions">
+            <button id="mazeEnterBtn" class="pill-btn">N7eb nedhkel</button>
+            <button id="mazeNotNowBtn" class="pill-btn ghost">5ayfa / Mouch taw</button>
+          </div>
+        </div>
+      </div>
+        </div>
+      </div>
+
+      <div id="giftNote" class="gift-note" hidden>
+        <div class="gift-card">
+          <div class="gift-ribbon">🎁</div>
+          <h2>Surprise finale 💗</h2>
+          <p id="giftNoteText"></p>
+          <button id="giftNoteClose" class="pill-btn">Merci 💗</button>
+        </div>
+      </div>
+
+      <div id="debugPanel" class="debug-panel" hidden></div>
+
+      <div id="loading" class="loading">
+        <div class="loading-ears"><span></span><span></span></div>
+        <div class="loading-face">
+          <span class="eye"></span><span class="eye"></span>
+          <span class="nose"></span>
+        </div>
+        <p>Arnouba is getting ready…</p>
+        <div class="loading-dots"><i></i><i></i><i></i></div>
+      </div>
+
+      <div id="wipe" class="wipe" aria-hidden="true">
+        <svg viewBox="0 0 100 100" preserveAspectRatio="xMidYMid slice">
+          <path
+            d="M50 88 C20 70 6 52 8 36 C10 18 26 12 38 20 C44 24 48 29 50 34 C52 29 56 24 62 20 C74 12 90 18 92 36 C94 52 80 70 50 88 Z"
+            fill="#ff9ec9"
+          />
+        </svg>
+      </div>
+    </div>
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>
