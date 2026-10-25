@@ -97,10 +97,10 @@ export const CONFIG = {
       "Ya Arnouba,\n\nMa n7ebch nkteb barcha klem kbar…\nN7eb ghir n9ollek: nti 7aja 8alya barcha fi 7yeti.\ni",
   },
   photos: [
-    { src: "`${import.meta.env.BASE_URL}photos/na_ou_arnouba.jpg`", caption: "Na w Arnouba 💗" },
+    { src: `${import.meta.env.BASE_URL}photos/na_ou_arnouba.jpg`, caption: "Na w Arnouba 💗" },
   ],
   photo: {
-    src: "`${import.meta.env.BASE_URL}photos/na_ou_arnouba.jpg`",
+    src: `${import.meta.env.BASE_URL}photos/na_ou_arnouba.jpg`,
     label: "Na w Arnouba \u{1F497}",
   },
   kridi: {
