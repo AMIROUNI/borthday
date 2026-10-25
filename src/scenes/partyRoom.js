@@ -341,6 +341,19 @@ export function createPartyRoom(ctx) {
     console.log("[party] phase:", phase);
   }
 
+  function playBirthdaySong() {
+    const audio = ctx.audio;
+    if (!audio) return;
+    audio.unlock();
+    const start = () => audio.play("birthday-song", { volume: 0.8, fadeIn: 0.12 });
+    if (audio.ready) {
+      start();
+      return;
+    }
+    const loading = audio.preload();
+    if (loading?.then) loading.then(start).catch(() => {});
+  }
+
   function setRoomMood(mood, duration = 0.8) {
     const values = {
       dim: { hemi: 0.2, sun: 0.06, fill: 0.08, window: 0.35, mobile: 0.2, photo: 0.25, bg: 0x2a1838 },
@@ -543,6 +556,7 @@ export function createPartyRoom(ctx) {
     state.fireworks = 9;
     state.fireworkTimer = 0;
     setRoomMood("party", 0.7);
+    playBirthdaySong();
     ctx.sfx("applause");
     animals.forEach((animal) => animal.clap(5));
     rabbit.happy().then(() => {

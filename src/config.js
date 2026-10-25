@@ -151,7 +151,7 @@ export const CONFIG = {
       "el bab el 7elou 9odamek",
     ],
     warning: "El game fiha jump scares \u{1F631}",
-    fail: "Ya3tik sa7A arnouba gire takmel bch ahhaha  \u{1F635} jarreb mara o5ra",
+    fail: "arnouba 5serte 3adi llmouhem arnouba kber ou zade chber hahah",
     foxTwist: "Hehe, ana li kont nkhawwef fik \u{1F98A}",
     victory: "Brava Arnouba!",
     texts: {
@@ -161,9 +161,10 @@ export const CONFIG = {
       startControls:
         "Mouse: camera \u00b7 WASD / arrows: rabbit \u00b7 Shift: ejri \u00b7 Space: dash \u00b7 Q: blast \u00b7 E: interact \u00b7 H: hide \u00b7 F: torch.",
       close: "Sakker \u{1F497}",
+      audioLoading: "Loading audio\u2026",
       pause: "Pause",
       pauseBody: "Khoudh nafas. Kif ma tkoun ready, sakker el card.",
-      failTitle: "Ya3tik sa7A arnouba gire takmel bch ahhaha  \u{1F635}",
+      failTitle: "arnouba 5serte 3adi llmouhem arnouba kber ou zade chber hahah",
       failBody: "El ghosts w el tha3leb ghallebouk. Sakker bech t3awed mel bidaya.",
       winTitle: "Brava Arnouba!",
       winBody: "Khrejt mel haunted maze. El party t7allet!",

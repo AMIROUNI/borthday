@@ -4,6 +4,7 @@ import { createHallway } from "./scenes/hallway.js";
 import { createScaryRoom } from "./scenes/scaryRoom.js";
 import { createPartyRoom } from "./scenes/partyRoom.js";
 import { createMaze } from "./scenes/maze.js";
+import { AudioManager } from "./audio/AudioManager.js";
 import { CONFIG } from "./config.js";
 import "./style.css";
 
@@ -35,6 +36,7 @@ const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 /* ------------------------------------------------------------------ */
 
 let audioCtx = null;
+let audioManager = null;
 let muted = false;
 try {
   muted = localStorage.getItem("arnouba-muted") === "1";
@@ -43,13 +45,15 @@ try {
 }
 
 function ensureAudio() {
-  if (muted) return;
+  if (muted) return null;
   if (!audioCtx) {
     const AC = window.AudioContext || window.webkitAudioContext;
-    if (!AC) return;
+    if (!AC) return null;
     audioCtx = new AC();
+    audioManager?.attach(audioCtx);
   }
   if (audioCtx.state === "suspended") audioCtx.resume().catch(() => {});
+  return audioCtx;
 }
 
 function beep({ freq = 660, dur = 0.1, type = "sine", gain = 0.035, delay = 0, slideTo = null }) {
@@ -260,6 +264,7 @@ muteBtn.addEventListener("click", (event) => {
   } catch (e) {
     /* ignore */
   }
+  audioManager?.setMuted(muted);
   refreshMuteButton();
   if (!muted) {
     ensureAudio();
@@ -287,6 +292,7 @@ renderer.toneMapping = THREE.NeutralToneMapping ?? THREE.ACESFilmicToneMapping;
 renderer.toneMappingExposure = 1.0;
 
 const camera = new THREE.PerspectiveCamera(55, window.innerWidth / window.innerHeight, 0.1, 80);
+audioManager = new AudioManager({ camera, ensureContext: ensureAudio });
 const lookTarget = new THREE.Vector3(0, 1.2, -2);
 const raycaster = new THREE.Raycaster();
 const pointer = new THREE.Vector2();
@@ -569,11 +575,12 @@ const ctx = {
   hideBlowButton,
   anyTap,
   sfx,
+  audio: audioManager,
   showLetter,
   showGiftNote,
   getAudio() {
     ensureAudio();
-    return { ctx: audioCtx, muted };
+    return { ctx: audioCtx, muted, manager: audioManager };
   },
 };
 
@@ -803,6 +810,7 @@ function loop(now) {
   if (!current) return;
   current.update(dt);
   updateCamera(dt);
+  audioManager?.update();
   renderer.render(current.scene, camera);
   updateIdle(dt);
 }
@@ -861,6 +869,7 @@ window.__arnouba = {
   },
   transition,
   ctx,
+  audio: audioManager,
   camera,
   renderer,
 };

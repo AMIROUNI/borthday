@@ -830,6 +830,43 @@ body.maze-shake #scene {
   display: none;
 }
 
+.maze-audio-load {
+  position: absolute;
+  top: calc(max(12px, env(safe-area-inset-top)) + 52px);
+  left: 50%;
+  width: min(280px, 70vw);
+  transform: translateX(-50%);
+  display: grid;
+  gap: 5px;
+  padding: 7px 10px;
+  border-radius: 12px;
+  background: rgba(24, 8, 22, 0.76);
+  border: 1px solid rgba(255, 182, 213, 0.25);
+  color: #ffd9ea;
+  font-size: 11px;
+  text-align: center;
+  backdrop-filter: blur(8px);
+}
+
+.maze-audio-load[hidden] {
+  display: none;
+}
+
+.maze-audio-track {
+  height: 4px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.16);
+}
+
+.maze-audio-fill {
+  width: 0%;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #ff7eb6, #ffd66b);
+  transition: width 0.15s linear;
+}
+
 .maze-top {
   position: absolute;
   top: max(12px, env(safe-area-inset-top));

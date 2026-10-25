@@ -21,6 +21,7 @@ import {
 } from "../models/mazeProps.js";
 import { createGhost, GHOST_TYPES } from "../models/ghosts.js";
 import { generateMaze, MAZE_CELL } from "../game/mazeGen.js";
+import { AUDIO_FALLBACKS } from "../audio/audioMap.js";
 
 const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -308,6 +309,9 @@ export function createMaze(ctx) {
     interact: document.getElementById("mazeInteractBtn"),
     prompt: document.getElementById("mazePrompt"),
     arrow: document.getElementById("mazeHintArrow"),
+    audioLoad: document.getElementById("mazeAudioLoad"),
+    audioLoadText: document.getElementById("mazeAudioLoadText"),
+    audioLoadFill: document.getElementById("mazeAudioLoadFill"),
     debug: document.getElementById("mazeDebug"),
     warning: document.getElementById("mazeWarning"),
     warningTitle: document.getElementById("mazeWarningTitle"),
@@ -393,10 +397,58 @@ export function createMaze(ctx) {
     lightsFlicked: false,
     winReady: false,
     ghostAudioTimer: 0,
+    footstepTimer: 0,
+    foxGrowlTimer: 0,
     lastInteractKey: null,
     lastMove: { x: 0, z: -1 },
     debugInfo: { ix: 0, iz: 0, moveX: 0, moveZ: 0, screenX: 0 },
   };
+
+  function playAudio(key, options = {}) {
+    const manager = ctx.audio;
+    if (manager?.play(key, options)) return true;
+    const fallback = AUDIO_FALLBACKS[key];
+    if (fallback) ctx.sfx(fallback);
+    return false;
+  }
+
+  function playAudioAt(key, position, options = {}) {
+    return playAudio(key, { ...options, position });
+  }
+
+  function showAudioLoad() {
+    if (hud.audioLoadText) hud.audioLoadText.textContent = CONFIG.maze.texts.audioLoading;
+    if (hud.audioLoadFill) hud.audioLoadFill.style.width = "0%";
+    if (hud.audioLoad) hud.audioLoad.hidden = false;
+  }
+
+  function setAudioLoadProgress(progress) {
+    if (hud.audioLoadFill) {
+      hud.audioLoadFill.style.width = `${Math.round(Math.max(0, Math.min(1, progress)) * 100)}%`;
+    }
+  }
+
+  function hideAudioLoad() {
+    if (hud.audioLoad) hud.audioLoad.hidden = true;
+  }
+
+  function startMazeAudio() {
+    const manager = ctx.audio;
+    if (!manager) {
+      hideAudioLoad();
+      return;
+    }
+    showAudioLoad();
+    manager.onProgress = (progress) => setAudioLoadProgress(progress);
+    manager.stopMaze();
+    manager.startMaze();
+    const result = manager.preload();
+    if (result?.then) {
+      result.then(hideAudioLoad).catch(hideAudioLoad);
+    } else {
+      hideAudioLoad();
+    }
+  }
 
   const player = {
     x: 0,
@@ -587,6 +639,8 @@ export function createMaze(ctx) {
     state.batsPlayed = false;
     state.trapdoorPlayed = false;
     state.hintTimer = 0;
+    state.footstepTimer = 0;
+    state.foxGrowlTimer = 0;
     state.blackout = 0;
     keys.forEach((key) => {
       key.collected = false;
@@ -636,6 +690,7 @@ export function createMaze(ctx) {
     state.leaving = false;
     if (hud.warning) hud.warning.hidden = true;
     if (hud.root) hud.root.hidden = false;
+    startMazeAudio();
     showPrompt(CONFIG.maze.texts.startControls, 5200);
     if (state.randomScare) {
       setTimeout(() => {
@@ -653,6 +708,10 @@ export function createMaze(ctx) {
     if (hud.pauseOverlay) hud.pauseOverlay.hidden = !show;
     if (hud.actions) hud.actions.hidden = show;
     if (hud.joystick) hud.joystick.hidden = show;
+    if (show) {
+      ctx.audio?.setHeartbeat(0);
+      ctx.audio?.setMusicState("calm");
+    }
   }
 
   function failGame() {
@@ -661,7 +720,9 @@ export function createMaze(ctx) {
     if (hud.root) hud.root.hidden = true;
     if (hud.fail) hud.fail.hidden = false;
     document.body.classList.remove("maze-shake");
-    ctx.sfx("growl");
+    ctx.audio?.setHeartbeat(0);
+    if (ctx.audio?.ready) ctx.audio.setMusicState("gameover");
+    else ctx.sfx("growl");
   }
 
   function respawn() {
@@ -688,7 +749,9 @@ export function createMaze(ctx) {
     state.caught = true;
     state.lives -= 1;
     updateHud();
-    ctx.sfx("scream");
+    ctx.audio?.setHeartbeat(0);
+    ctx.audio?.duck(0.12, 900);
+    playAudio("jumpscare");
     fox.lunge();
     if (hud.jumpscare) hud.jumpscare.hidden = false;
     document.body.classList.add("maze-shake");
@@ -712,7 +775,7 @@ export function createMaze(ctx) {
     key.def.collected = true;
     state.keysFound += 1;
     key.mesh.collect();
-    ctx.sfx("key");
+    playAudio("key-pickup");
     addScore(120);
     updateHud();
     showPrompt(`Mabrouk! Key ${state.keysFound} / ${CONFIG.maze.keys} \u{1F511}`, 1800);
@@ -728,7 +791,8 @@ export function createMaze(ctx) {
   }
 
   function triggerRandomScare() {
-    ctx.sfx("whisper");
+    ctx.audio?.duck(0.4, 500);
+    playAudio("whisper");
     showPrompt("Arnouba\u2026 nchoufouk\u2026 \u{1F47B}", 2200);
     world.lamps.forEach((lamp) => {
       gsap.to(lamp.light, { intensity: 0.05, duration: 0.2, yoyo: true, repeat: 5 });
@@ -769,6 +833,7 @@ export function createMaze(ctx) {
     state.bossActive = true;
     state.bossStun = 0;
     state.bossRespawn = 0;
+    playAudioAt("ghost-wail", { x: bx, y: 1.4, z: bz }, { volume: 1 });
   }
 
   function startFinalChase() {
@@ -786,7 +851,8 @@ export function createMaze(ctx) {
       gsap.to(lamp.light, { intensity: 0.08, duration: 0.12, yoyo: true, repeat: 7, delay: i * 0.04 });
     });
     showPrompt(CONFIG.maze.texts.finalChase, 3800);
-    ctx.sfx("growl");
+    ctx.audio?.setMusicState("chase", { force: true, fade: 0.8 });
+    playAudioAt("fox-growl", fox.group.position, { volume: 1 });
   }
 
   function flashScreen(kind = "blast", ms = 220) {
@@ -815,35 +881,19 @@ export function createMaze(ctx) {
 
   function ghostAudio(entry, dist) {
     entry.soundTimer = 1.5 + Math.random() * 2.5;
-    const audio = ctx.getAudio?.();
-    if (!audio || !audio.ctx || audio.muted) {
-      if (dist < 3.5) ctx.sfx("whisper");
-      return;
-    }
-    const ac = audio.ctx;
-    const now = ac.currentTime;
-    const rightX = Math.cos(player.camYaw);
-    const rightZ = -Math.sin(player.camYaw);
-    const side = (entry.model.position.x - player.x) * rightX + (entry.model.position.z - player.z) * rightZ;
-    const pan = Math.max(-1, Math.min(1, side / 5));
-    const gain = Math.max(0.005, 0.05 * (1 - dist / 9));
-    const osc = ac.createOscillator();
-    osc.type = entry.type === "kid" ? "triangle" : "sine";
-    osc.frequency.setValueAtTime(entry.type === "kid" ? 420 : 120 + Math.random() * 70, now);
-    osc.frequency.exponentialRampToValueAtTime(entry.type === "kid" ? 620 : 80, now + 0.8);
-    const g = ac.createGain();
-    g.gain.setValueAtTime(0.0001, now);
-    g.gain.exponentialRampToValueAtTime(gain, now + 0.08);
-    g.gain.exponentialRampToValueAtTime(0.0001, now + 0.9);
-    if (ac.createStereoPanner) {
-      const panner = ac.createStereoPanner();
-      panner.pan.value = pan;
-      osc.connect(g).connect(panner).connect(ac.destination);
-    } else {
-      osc.connect(g).connect(ac.destination);
-    }
-    osc.start(now);
-    osc.stop(now + 0.95);
+    const key =
+      entry.type === "kid"
+        ? "ghost-giggle"
+        : entry.type === "lantern"
+          ? "ghost-wail"
+          : Math.random() < 0.5
+            ? "ghost-wail"
+            : "whisper";
+    playAudioAt(
+      key,
+      { x: entry.model.position.x, y: 1.15, z: entry.model.position.z },
+      { volume: Math.max(0.35, 1 - dist / 12), rate: 0.92 + Math.random() * 0.16 }
+    );
   }
 
   function stunNearby(x, z, radius, seconds = 2.4) {
@@ -874,12 +924,14 @@ export function createMaze(ctx) {
     document.body.classList.add("maze-shake");
     flashScreen("hit", 260);
     showVignette(900);
-    ctx.sfx("scream");
     if (state.shield > 0) {
       state.shield = 0;
+      playAudio("stun-zap");
       showPrompt(CONFIG.maze.texts.shieldBlock, 1800);
       return;
     }
+    ctx.audio?.duck(0.25, 350);
+    playAudio("hurt");
     state.lives -= 1;
     updateHud();
     const dx = player.x - entry.model.position.x;
@@ -1043,7 +1095,7 @@ export function createMaze(ctx) {
       showPrompt(CONFIG.maze.texts.powerBattery, 1800);
     }
     addScore(60);
-    ctx.sfx("ding");
+    playAudio(power.type === "battery" ? "battery-pickup" : "power-up");
     updateHud();
   }
 
@@ -1102,14 +1154,14 @@ export function createMaze(ctx) {
       state.doorSlammed = true;
       slamDoor.slam();
       const count = stunNearby(slamDoor.group.position.x, slamDoor.group.position.z, 3.4, 2.6);
-      ctx.sfx("creak");
+      playAudioAt("door-slam", slamDoor.group.position, { volume: 0.9 });
       showPrompt(CONFIG.maze.texts.slam + (count ? ` (${count})` : ""), 1800);
       addScore(80);
     } else if (target.type === "shelf") {
       state.shelfToppled = true;
       fallingShelf.topple();
       const count = stunNearby(fallingShelf.group.position.x, fallingShelf.group.position.z, 3.4, 2.6);
-      ctx.sfx("creak");
+      playAudioAt("shelf-crash", fallingShelf.group.position, { volume: 0.9 });
       showPrompt(CONFIG.maze.texts.shelf + (count ? ` (${count})` : ""), 1800);
       addScore(80);
     } else if (target.type === "lights") {
@@ -1124,7 +1176,7 @@ export function createMaze(ctx) {
         });
       });
       const count = stunNearby(painting.group.position.x, painting.group.position.z, 5.2, 2.2);
-      ctx.sfx("tap");
+      playAudioAt("stun-zap", painting.group.position, { volume: 0.7 });
       showPrompt(CONFIG.maze.texts.lights + (count ? ` (${count})` : ""), 1800);
       addScore(50);
     }
@@ -1145,7 +1197,7 @@ export function createMaze(ctx) {
     state.dashTimer = cfg.duration;
     state.dashCooldown = cfg.cooldown;
     state.invuln = Math.max(state.invuln, cfg.invuln);
-    ctx.sfx("whoosh");
+    playAudio("dash-whoosh");
     if (hud.dashFx) {
       hud.dashFx.hidden = false;
       hud.dashFx.classList.add("show");
@@ -1209,7 +1261,7 @@ export function createMaze(ctx) {
     flashScreen("blast", 200);
     state.shakeTimer = 0.25;
     document.body.classList.add("maze-shake");
-    ctx.sfx("whoosh");
+    playAudioAt("flashlight-blast", { x: player.x, y: 1.2, z: player.z }, { volume: 0.9 });
     showPrompt(hits ? CONFIG.maze.texts.blastStun : "Blast\u2026 ma sabet walou \u{1F4A5}", 1500);
     updateHud();
   }
@@ -1220,12 +1272,14 @@ export function createMaze(ctx) {
     state.active = false;
     state.exitOpening = true;
     exitDoor.setLocks(0);
-    ctx.sfx("key");
+    playAudio("lock-click");
     if (hud.root) hud.root.hidden = true;
     if (hud.actions) hud.actions.hidden = true;
     if (hud.joystick) hud.joystick.hidden = true;
     exitDoor.open().then(() => {
-      ctx.sfx("success");
+      ctx.audio?.setHeartbeat(0);
+      if (ctx.audio?.ready) ctx.audio.setMusicState("victory");
+      else ctx.sfx("success");
       if (hud.win) hud.win.hidden = false;
     });
   }
@@ -1288,7 +1342,7 @@ export function createMaze(ctx) {
         foxState.mode = "CHASE";
         fox.setMode("CHASE");
         foxState.repath = 0;
-        ctx.sfx("growl");
+        playAudioAt("fox-growl", fox.group.position, { volume: 0.95 });
       }
     } else if (canHear && foxState.mode === "PATROL") {
       foxState.lastKnown = { x: player.x, z: player.z };
@@ -1543,7 +1597,7 @@ export function createMaze(ctx) {
         entry.writing.reveal();
         if (!state.scares.writing) {
           state.scares.writing = true;
-          ctx.sfx("whisper");
+          playAudioAt("whisper", { x: entry.x, y: 1.4, z: entry.z });
         }
       }
     }
@@ -1553,24 +1607,25 @@ export function createMaze(ctx) {
     if (!state.scares.firstKey && state.keysFound >= 1) {
       state.scares.firstKey = true;
       state.blackout = 1.4;
-      ctx.sfx("creak");
+      ctx.audio?.duck(0.45, 600);
+      playAudio("door-creak");
       showPrompt("El dhouw yteffa\u2026 \u{1F56F}", 2000);
     }
     if (!state.scares.secondKey && state.keysFound >= 2) {
       state.scares.secondKey = true;
-      ctx.sfx("creak");
+      playAudioAt("door-slam", { x: player.x, y: 1.2, z: player.z - 2.5 });
       showPrompt("Bab tsakker morak\u2026 bara bara \u{1F6AA}", 2200);
     }
     if (state.blackout > 0) state.blackout -= dt;
 
     if (bedroomRoom && !state.scares.doll && Math.hypot(player.x - bedroomRoom.x, player.z - bedroomRoom.z) < 2.4) {
       state.scares.doll = true;
-      ctx.sfx("squeak");
+      playAudioAt("duck-squeak", doll.group.position);
       setTimeout(() => {
         if (!state.dollFallen) {
           state.dollFallen = true;
           doll.fall();
-          ctx.sfx("creak");
+          playAudioAt("door-creak", doll.group.position);
           showPrompt("El doll t7arrek\u2026 \u{1F9F8}", 1800);
         }
       }, 1200);
@@ -1582,14 +1637,15 @@ export function createMaze(ctx) {
       state.paintingActive = true;
       painting.activate();
       setCheckpoint(libraryRoom.r, libraryRoom.c);
-      ctx.sfx("musicBox");
+      ctx.audio?.setMusicState("safe", { force: true, fade: 0.6 });
       showPrompt("Tsawirtna! Safe zone + checkpoint \u{1F497}", 2600);
     }
     painting.update(player);
 
     if (kitchenRoom && !state.scares.bear && Math.hypot(player.x - kitchenRoom.x, player.z - kitchenRoom.z) < 2.2) {
       state.scares.bear = true;
-      ctx.sfx("scream");
+      ctx.audio?.duck(0.18, 900);
+      playAudioAt("jumpscare", bear.group.position);
       bear.reveal().then(() => {
         if (state.bearGaveKey) return;
         state.bearGaveKey = true;
@@ -1605,7 +1661,7 @@ export function createMaze(ctx) {
 
     if (toyRoom && !state.radioPlayed && Math.hypot(player.x - toyRoom.x, player.z - toyRoom.z) < 2.2) {
       state.radioPlayed = true;
-      ctx.sfx("whisper");
+      playAudioAt("radio-static", radio.group.position);
       showPrompt("Arnouba\u2026 Arnouba\u2026 nchoufouk\u2026 \u{1F4FB}", 2600);
     }
 
@@ -1614,7 +1670,7 @@ export function createMaze(ctx) {
       state.scares.fakeExit = true;
       fakeExit.open().then(() => {
         showPrompt("bara bara \u{1F47B} mouch el bab hedha", 2600);
-        ctx.sfx("creak");
+        playAudioAt("door-creak", fakeExit.group.position);
       });
     }
 
@@ -1622,20 +1678,24 @@ export function createMaze(ctx) {
       const cell = maze.worldToCell(player.x, player.z);
       if (maze.distance(cell.r, cell.c) > 6) {
         state.scares.hands = true;
-        ctx.sfx("whisper");
+        playAudioAt("whisper", { x: player.x, y: 1.5, z: player.z - 1.2 });
         showPrompt("Idin tla3ou mel 7it\u2026 \u{1F47B}", 2200);
       }
     }
 
     if (!state.scares.bats && state.keysFound >= 1 && state.time > 18) {
       state.scares.bats = true;
-      ctx.sfx("bats");
+      playAudioAt("bats", {
+        x: player.x + (Math.random() - 0.5) * 3,
+        y: 2.2,
+        z: player.z + (Math.random() - 0.5) * 3,
+      });
       showPrompt("Chkoun tayr fik? \u{1F987}", 1800);
     }
 
     if (!state.scares.trapdoor && state.time > 35) {
       state.scares.trapdoor = true;
-      ctx.sfx("splash");
+      playAudioAt("splash", { x: player.x, y: 0.1, z: player.z });
       showPrompt("El ardhia 7allet\u2026 splash! \u{1F30A}", 2200);
     }
 
@@ -1671,6 +1731,7 @@ export function createMaze(ctx) {
       state.hidden = false;
       rabbit.group.visible = true;
       state.active = true;
+      playAudio("ui-click");
       updateHud();
       showPrompt("Khrejt\u2026 bqaddek!", 1000);
       return;
@@ -1686,13 +1747,14 @@ export function createMaze(ctx) {
     rabbit.setWalking(false);
     updateHud();
     showPrompt("Tkhabba\u2026 t7ammes \u{1F497}", 1600);
-    ctx.sfx("heartbeat");
+    playAudio("ui-click");
+    ctx.audio?.setHeartbeat(0.3);
   }
 
   function toggleTorch() {
     state.flashlightOn = !state.flashlightOn;
     updateHud();
-    ctx.sfx("tap");
+    playAudio("flashlight-click");
   }
 
   function onKeyDown(event) {
@@ -1708,6 +1770,7 @@ export function createMaze(ctx) {
     if (event.code === "KeyQ") {
       state.blastCharging = true;
       state.blastCharge = 0;
+      playAudio("flashlight-charge");
       return;
     }
     if (event.code === "KeyE") {
@@ -1833,6 +1896,7 @@ export function createMaze(ctx) {
     if (!state.active || state.paused || state.hidden) return;
     state.blastCharging = true;
     state.blastCharge = 0;
+    playAudio("flashlight-charge");
     hud.blast.setPointerCapture?.(event.pointerId);
   });
   hud.blast?.addEventListener("pointerup", (event) => {
@@ -1861,9 +1925,12 @@ export function createMaze(ctx) {
       <div>state: <span id="dbgState">-</span></div>
       <div>fox: <span id="dbgFox">-</span></div>
       <div>ghosts: <span id="dbgGhost">-</span></div>
+      <div>music: <span id="dbgMusic">-</span></div>
+      <div>audio: <span id="dbgAudio">-</span></div>
       <div>fps: <span id="dbgFps">-</span></div>
       <button id="dbgKey">+key</button>
       <button id="dbgStun">stun ghosts</button>
+      <button id="dbgAudioState">cycle audio</button>
       <button id="dbgExit">exit</button>
     `;
     hud.debug.querySelector("#dbgKey")?.addEventListener("click", () => {
@@ -1872,6 +1939,12 @@ export function createMaze(ctx) {
     });
     hud.debug.querySelector("#dbgStun")?.addEventListener("click", () => {
       stunNearby(player.x, player.z, 20, 4);
+    });
+    hud.debug.querySelector("#dbgAudioState")?.addEventListener("click", () => {
+      const states = ["calm", "tension", "chase"];
+      const current = ctx.audio?.debugState?.state;
+      const next = states[(states.indexOf(current) + 1) % states.length];
+      ctx.audio?.setMusicState(next, { force: true });
     });
     hud.debug.querySelector("#dbgExit")?.addEventListener("click", () => {
       while (state.keysFound < CONFIG.maze.keys) {
@@ -1895,6 +1968,8 @@ export function createMaze(ctx) {
       const s = hud.debug.querySelector("#dbgState");
       const f = hud.debug.querySelector("#dbgFox");
       const g = hud.debug.querySelector("#dbgGhost");
+      const music = hud.debug.querySelector("#dbgMusic");
+      const audio = hud.debug.querySelector("#dbgAudio");
       const p = hud.debug.querySelector("#dbgFps");
       const input = hud.debug.querySelector("#dbgInput");
       const yaw = hud.debug.querySelector("#dbgYaw");
@@ -1905,6 +1980,13 @@ export function createMaze(ctx) {
       if (g) {
         const chasing = ghostEntries.filter((entry) => entry.mode === "CHASE").length;
         g.textContent = `${ghostEntries.filter((entry) => entry.model.active).length}/${ghostEntries.length} active · ${chasing} chasing`;
+      }
+      const audioState = ctx.audio?.debugState;
+      if (music) music.textContent = audioState?.state ?? "-";
+      if (audio) {
+        audio.textContent = audioState
+          ? `${audioState.ready ? "ready" : "loading"} ${Math.round((audioState.progress || 0) * 100)}% active:${audioState.active} hb:${(audioState.heartbeat || 0).toFixed(2)}`
+          : "-";
       }
       if (p) p.textContent = String(state.fps);
       if (input) input.textContent = `${state.debugInfo.ix.toFixed(2)}, ${state.debugInfo.iz.toFixed(2)}`;
@@ -1917,6 +1999,63 @@ export function createMaze(ctx) {
           state.debugInfo.screenX = (v.x * 0.5 + 0.5) * window.innerWidth;
           screen.textContent = `${Math.round(state.debugInfo.screenX)}px`;
         }
+      }
+    }
+  }
+
+  function nearestThreatDistance() {
+    let nearest = Infinity;
+    const consider = (x, z) => {
+      const distance = Math.hypot(player.x - x, player.z - z);
+      if (distance < nearest) nearest = distance;
+    };
+    if (state.foxStun <= 0 && fox.group.visible) {
+      consider(fox.group.position.x, fox.group.position.z);
+    }
+    for (const entry of ghostEntries) {
+      if (!entry.model.active || entry.mode === "STUNNED") continue;
+      consider(entry.model.position.x, entry.model.position.z);
+    }
+    if (state.bossActive && boss.active && state.bossStun <= 0) {
+      consider(boss.position.x, boss.position.z);
+    }
+    return nearest;
+  }
+
+  function updateAudio(dt) {
+    const manager = ctx.audio;
+    if (!manager) return;
+    if (!state.active || state.paused || state.caught || state.leaving) {
+      manager.setHeartbeat(0);
+      return;
+    }
+    const nearest = nearestThreatDistance();
+    const danger = Math.max(0, Math.min(1, 1 - nearest / 9));
+    const safe = state.hidden || isSafeZone();
+    const ghostChasing = ghostEntries.some((entry) => entry.model.active && entry.mode === "CHASE");
+    let next = "calm";
+    if (safe) next = "safe";
+    else if (state.finalChase || foxState.mode === "CHASE" || ghostChasing || danger > 0.72) next = "chase";
+    else if (danger > 0.28) next = "tension";
+    manager.setMusicState(next);
+    manager.setHeartbeat(safe ? 0 : Math.min(1, danger * 1.25));
+
+    if (player.moving && !state.hidden) {
+      state.footstepTimer -= dt;
+      if (state.footstepTimer <= 0) {
+        state.footstepTimer = player.running ? 0.27 : 0.43;
+        manager.playFootstep(player.running, { x: player.x, y: 0.08, z: player.z });
+      }
+    } else {
+      state.footstepTimer = 0;
+    }
+
+    state.foxGrowlTimer = Math.max(0, state.foxGrowlTimer - dt);
+    if (!safe && state.foxStun <= 0 && fox.group.visible && state.foxGrowlTimer <= 0) {
+      const foxDistance = Math.hypot(player.x - fox.group.position.x, player.z - fox.group.position.z);
+      if (foxDistance < 7) {
+        state.foxGrowlTimer = 4.5 + Math.random() * 3;
+        playAudioAt("fox-growl", fox.group.position, { volume: 0.8 });
       }
     }
   }
@@ -1957,6 +2096,7 @@ export function createMaze(ctx) {
     updateInteractions();
     updateCameraTargets();
     updateHud();
+    updateAudio(dt);
     updateDebug(dt);
   }
 
@@ -2000,6 +2140,8 @@ export function createMaze(ctx) {
     state.leaving = false;
     state.paused = false;
     state.randomScare = Math.random() < 0.05;
+    ctx.audio?.stopMaze();
+    hideAudioLoad();
     resetGame();
     document.body.classList.add("maze-active");
     if (hud.warningTitle) hud.warningTitle.textContent = CONFIG.maze.texts.startTitle;
@@ -2018,6 +2160,8 @@ export function createMaze(ctx) {
 
   function dispose() {
     state.active = false;
+    ctx.audio?.stopMaze();
+    hideAudioLoad();
     window.removeEventListener("keydown", onKeyDown);
     window.removeEventListener("keyup", onKeyUp);
     sceneCanvas?.removeEventListener("pointerdown", onMouseDown);
